@@ -3,14 +3,15 @@ package main
 import (
 	"log"
 
+	"geoswitch/internal/relay"
 	"geoswitch/internal/server"
 )
 
 func main() {
-	addr := ":8080"
-	log.Printf("GeoSwitch starting on %s\n", addr)
+	handler := relay.NewHTTPRelay(nil)
 
-	if err := server.Start(addr); err != nil {
-		log.Fatal(err)
-	}
+	srv := server.New(":8080", handler)
+
+	log.Println("GeoSwitch listening on :8080")
+	log.Fatal(srv.ListenAndServe())
 }
