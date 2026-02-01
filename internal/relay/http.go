@@ -8,9 +8,17 @@ import (
 	"strings"
 )
 
-// HTTPRelay handles prefix-style URL relaying:
-//
-//	/https://example.com/path
+var hopByHopHeaders = map[string]bool{
+	"Connection":          true,
+	"Keep-Alive":          true,
+	"Proxy-Authenticate":  true,
+	"Proxy-Authorization": true,
+	"Te":                  true,
+	"Trailers":            true,
+	"Transfer-Encoding":   true,
+	"Upgrade":             true,
+}
+
 type HTTPRelay struct {
 	Client *http.Client
 }
@@ -25,7 +33,7 @@ func NewHTTPRelay(client *http.Client) *HTTPRelay {
 func (h *HTTPRelay) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	target, err := extractTargetURL(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Invalid target URL: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -36,16 +44,18 @@ func (h *HTTPRelay) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		r.Body,
 	)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to create request: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Clone headers explicitly
-	outReq.Header = r.Header.Clone()
+	// Copy headers selectively
+	copyHeaders(outReq.Header, r.Header)
+	outReq.Header.Set("Host", target.Host) // Override with target host
+	outReq.RequestURI = ""                 // Must be cleared for client requests
 
 	resp, err := h.Client.Do(outReq)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		http.Error(w, "Backend error: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
@@ -53,12 +63,23 @@ func (h *HTTPRelay) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	copyHeaders(w.Header(), resp.Header)
 	w.WriteHeader(resp.StatusCode)
 
-	// Stream response body
-	io.Copy(w, resp.Body)
+	// Check for copy errors
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		// Too late to send error, but log it if you have logging
+		_ = err
+	}
 }
 
 func extractTargetURL(r *http.Request) (*url.URL, error) {
-	raw := strings.TrimPrefix(r.URL.Path, "/")
+	raw := ""
+	if r.URL.IsAbs() {
+		raw = strings.TrimPrefix(r.URL.String(), "/")
+	} else {
+		raw = strings.TrimPrefix(r.URL.EscapedPath(), "/")
+		if r.URL.RawQuery != "" {
+			raw += "?" + r.URL.RawQuery
+		}
+	}
 
 	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
 		return nil, errors.New("target URL must start with http:// or https://")
@@ -73,7 +94,19 @@ func extractTargetURL(r *http.Request) (*url.URL, error) {
 }
 
 func copyHeaders(dst, src http.Header) {
-	for k, v := range src {
-		dst[k] = v
+	for k, vv := range src {
+		// Skip hop-by-hop headers
+		if hopByHopHeaders[k] {
+			continue
+		}
+
+		// Skip sensitive headers
+		if k == "Authorization" || k == "Cookie" {
+			continue
+		}
+
+		for _, v := range vv {
+			dst.Add(k, v)
+		}
 	}
 }
