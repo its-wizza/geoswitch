@@ -13,7 +13,7 @@ var hopByHopHeaders = map[string]bool{
 	"Keep-Alive":          true,
 	"Proxy-Authenticate":  true,
 	"Proxy-Authorization": true,
-	"Te":                  true,
+	"TE":                  true,
 	"Trailers":            true,
 	"Transfer-Encoding":   true,
 	"Upgrade":             true,
