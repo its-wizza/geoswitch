@@ -6,6 +6,7 @@ import (
 	"net/url"
 )
 
+// TargetResolver takes a request and returns the target URL to which the request should be proxied.
 type TargetResolver func(*http.Request) (*url.URL, error)
 
 // NewDynamicTargetHandler returns an http.Handler that resolves the target
@@ -18,20 +19,24 @@ func NewDynamicTargetHandler(resolver TargetResolver, proxyHandler http.Handler)
 		target, err := resolver(req)
 		if err != nil {
 			log.Printf("[handler] resolver error: %v", err)
-			http.Error(writer, "Could not resolve target", http.StatusNotFound)
+			http.Error(writer, "Could not resolve target", http.StatusBadRequest)
+			return
+		}
+		if !target.IsAbs() || target.Host == "" {
+			log.Printf("[handler] invalid target URL: %s", target.String())
+			http.Error(writer, "Target must be absolute URL", http.StatusBadRequest)
 			return
 		}
 
 		log.Printf("[handler] resolved target: %s", target.String())
 
-		// Clone request and set target URL
-		out := req.Clone(req.Context())
-		out.URL = target
-		out.Host = target.Host
-		out.RequestURI = ""
+		// Set target URL
+		req.URL = target
+		req.Host = target.Host
+		req.RequestURI = ""
 
-		log.Printf("[handler] proxying to %s", out.URL.String())
+		log.Printf("[handler] proxying to %s", req.URL.String())
 
-		proxyHandler.ServeHTTP(writer, out)
+		proxyHandler.ServeHTTP(writer, req)
 	})
 }

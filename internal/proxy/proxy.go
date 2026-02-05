@@ -10,7 +10,7 @@ import (
 func NewReverseProxy() *httputil.ReverseProxy {
 	return &httputil.ReverseProxy{
 		Rewrite: func(req *httputil.ProxyRequest) {
-			// No-op: URL and Host must be set by the caller.
+			// Target URL is already set in the request
 		},
 	}
 }
