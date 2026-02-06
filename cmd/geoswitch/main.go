@@ -40,16 +40,10 @@ func main() {
 	// Dummy exit for testing
 	const testExit proxy.Exit = "test"
 	proxies[testExit] = proxy.NewReverseProxy()
-	headerExitSelector := func(req *http.Request, _ *url.URL) (proxy.Exit, error) {
-		if req.Header.Get("X-Test-Exit") == "test" {
-			return testExit, nil
-		}
-		return proxy.DefaultExit, nil
-	}
 
-	handler := proxy.NewDynamicHandler(
+	handler := proxy.NewProxyHandler(
 		relativePathReferenceResolver,
-		headerExitSelector,
+		proxy.PathSegmentExitSelector,
 		proxies,
 	)
 
