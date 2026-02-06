@@ -19,9 +19,6 @@ func relativePathReferenceResolver(req *http.Request) (*url.URL, error) {
 	if req.URL.RawQuery != "" {
 		target += "?" + req.URL.RawQuery
 	}
-	if req.URL.Fragment != "" {
-		target += "#" + req.URL.Fragment
-	}
 
 	parsedURL, err := url.Parse(target)
 	if err != nil {
@@ -36,8 +33,25 @@ func relativePathReferenceResolver(req *http.Request) (*url.URL, error) {
 func main() {
 	log.Println("[main] initialising geoswitch")
 
-	reverseProxy := proxy.NewReverseProxy()
-	handler := proxy.NewDynamicTargetHandler(relativePathReferenceResolver, reverseProxy)
+	proxies := map[proxy.Exit]http.Handler{
+		proxy.DefaultExit: proxy.NewReverseProxy(),
+	}
+
+	// Dummy exit for testing
+	const testExit proxy.Exit = "test"
+	proxies[testExit] = proxy.NewReverseProxy()
+	headerExitSelector := func(req *http.Request, _ *url.URL) (proxy.Exit, error) {
+		if req.Header.Get("X-Test-Exit") == "test" {
+			return testExit, nil
+		}
+		return proxy.DefaultExit, nil
+	}
+
+	handler := proxy.NewDynamicHandler(
+		relativePathReferenceResolver,
+		headerExitSelector,
+		proxies,
+	)
 
 	server := &http.Server{
 		Addr:    ":8080",
