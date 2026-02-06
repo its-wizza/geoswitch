@@ -30,7 +30,7 @@ func TestExitSelectorIsCalled(t *testing.T) {
 		}),
 	}
 
-	handler := NewDynamicHandler(resolver, exitSelector, proxies)
+	handler := NewProxyHandler(resolver, exitSelector, proxies)
 
 	req := httptest.NewRequest("GET", "/https://example.com", nil)
 	rr := httptest.NewRecorder()
@@ -61,7 +61,7 @@ func TestUnknownExitReturnsBadGateway(t *testing.T) {
 		}),
 	}
 
-	handler := NewDynamicHandler(resolver, exitSelector, proxies)
+	handler := NewProxyHandler(resolver, exitSelector, proxies)
 
 	req := httptest.NewRequest("GET", "/https://example.com", nil)
 	rr := httptest.NewRecorder()
@@ -91,7 +91,7 @@ func TestCorrectProxyIsUsed(t *testing.T) {
 		}),
 	}
 
-	handler := NewDynamicHandler(resolver, exitSelector, proxies)
+	handler := NewProxyHandler(resolver, exitSelector, proxies)
 
 	req := httptest.NewRequest("GET", "/https://example.com", nil)
 	rr := httptest.NewRecorder()
