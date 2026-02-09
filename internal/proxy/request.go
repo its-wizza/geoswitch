@@ -2,7 +2,7 @@ package proxy
 
 import (
 	"net/http"
-	"net/url"
+	"strings"
 )
 
 // RequestContext holds information extracted from an HTTP request
@@ -12,17 +12,29 @@ type RequestContext struct {
 
 	PathSegments []string
 
-	RawPath string
-	Query   url.Values
-	Headers http.Header
+	Path     string
+	RawQuery string
+	Headers  http.Header
 }
 
 func NewRequestContext(r *http.Request) *RequestContext {
 	return &RequestContext{
 		OriginalRequest: r,
-		PathSegments:    splitPath(r.URL.Path),
-		RawPath:         r.URL.Path,
-		Query:           r.URL.Query(),
-		Headers:         r.Header,
+
+		PathSegments: splitPath(r.URL.Path),
+
+		Path: r.URL.Path,
+
+		RawQuery: r.URL.RawQuery,
+		Headers:  r.Header,
 	}
+}
+
+// splitPath splits a URL path into its segments, ignoring leading slashes.
+func splitPath(path string) []string {
+	path = strings.Trim(path, "/")
+	if path == "" {
+		return nil
+	}
+	return strings.Split(path, "/")
 }

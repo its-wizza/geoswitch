@@ -3,7 +3,6 @@ package proxy
 import (
 	"log"
 	"net/http"
-	"strings"
 )
 
 // NewProxyHandler returns an http.Handler that resolves the target for
@@ -15,7 +14,8 @@ func NewProxyHandler(resolver TargetResolver, exitSelector ExitSelector, proxies
 		log.Printf("[handler] %s %s from %s", req.Method, req.RequestURI, req.RemoteAddr)
 
 		// 1. Get target
-		target, err := resolver(req)
+		ctx := NewRequestContext(req)
+		target, err := resolver(ctx)
 		if err != nil {
 			log.Printf("[handler] resolver error: %v", err)
 			http.Error(writer, "Could not resolve target", http.StatusBadRequest)
@@ -59,13 +59,4 @@ func NewProxyHandler(resolver TargetResolver, exitSelector ExitSelector, proxies
 
 		proxy.ServeHTTP(writer, req)
 	})
-}
-
-// splitPath splits a URL path into its segments, ignoring leading slashes.
-func splitPath(path string) []string {
-	path = strings.Trim(path, "/")
-	if path == "" {
-		return nil
-	}
-	return strings.Split(path, "/")
 }

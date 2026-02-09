@@ -12,7 +12,7 @@ func TestExitSelectorIsCalled(t *testing.T) {
 	var exitSelectorCalls int
 
 	// Fake resolver
-	resolver := func(r *http.Request) (*url.URL, error) {
+	resolver := func(ctx *RequestContext) (*url.URL, error) {
 		resolverCalls++
 		return url.Parse("https://example.com")
 	}
@@ -47,7 +47,7 @@ func TestExitSelectorIsCalled(t *testing.T) {
 }
 
 func TestUnknownExitReturnsBadGateway(t *testing.T) {
-	resolver := func(r *http.Request) (*url.URL, error) {
+	resolver := func(ctx *RequestContext) (*url.URL, error) {
 		return url.Parse("https://example.com")
 	}
 
@@ -76,7 +76,7 @@ func TestUnknownExitReturnsBadGateway(t *testing.T) {
 func TestCorrectProxyIsUsed(t *testing.T) {
 	var proxyCalled bool
 
-	resolver := func(r *http.Request) (*url.URL, error) {
+	resolver := func(ctx *RequestContext) (*url.URL, error) {
 		return url.Parse("https://example.com")
 	}
 
