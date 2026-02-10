@@ -13,7 +13,7 @@ func NewProxyHandler(resolver TargetResolver, exitSelector ExitSelector, proxies
 	return http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 		log.Printf("[handler] %s %s from %s", req.Method, req.RequestURI, req.RemoteAddr)
 
-		// 1. Get target
+		// Get target
 		ctx := NewRequestContext(req)
 		target, err := resolver(ctx)
 		if err != nil {

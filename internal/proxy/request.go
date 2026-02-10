@@ -30,7 +30,7 @@ func NewRequestContext(r *http.Request) *RequestContext {
 	}
 }
 
-// splitPath splits a URL path into its segments, ignoring leading slashes.
+// splitPath splits a URL path into its segments, ignoring bordering slashes.
 func splitPath(path string) []string {
 	path = strings.Trim(path, "/")
 	if path == "" {
