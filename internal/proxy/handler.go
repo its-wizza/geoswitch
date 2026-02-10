@@ -53,7 +53,9 @@ func NewProxyHandler(resolver TargetResolver, exitSelector ExitSelector, proxies
 		req.URL.Host = target.Host
 		req.URL.Path = target.Path
 		req.URL.RawQuery = target.RawQuery
-		req.RequestURI = "" // RequestURI must be empty when making client requests
+		req.URL.Fragment = ""
+		req.Host = target.Host
+		req.RequestURI = ""
 
 		log.Printf("[handler] proxying to %s", req.URL.String())
 
