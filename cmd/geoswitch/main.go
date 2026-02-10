@@ -10,6 +10,7 @@ import (
 func main() {
 	log.Println("[main] initialising geoswitch")
 
+	// Define exits (for now they all use the same reverse proxy)
 	proxies := map[proxy.Exit]http.Handler{
 		proxy.DefaultExit: proxy.NewReverseProxy(),
 	}
@@ -18,10 +19,15 @@ func main() {
 	const testExit proxy.Exit = "test"
 	proxies[testExit] = proxy.NewReverseProxy()
 
+	// Build handler with intent parsers (ORDER MATTERS)
 	handler := proxy.NewProxyHandler(
-		proxy.RelativePathReferenceResolver,
-		proxy.PathSegmentExitSelector,
 		proxies,
+
+		// 1. Highest priority: explicit header-based exit
+		proxy.HeaderExitParser("X-GeoSwitch-Exit"),
+
+		// 2. Path-based target/exit (e.g. /test/http://example.com)
+		proxy.PathIntentParser,
 	)
 
 	server := &http.Server{
@@ -29,6 +35,6 @@ func main() {
 		Handler: handler,
 	}
 
-	log.Println("[main] starting geoswitch on :8080")
+	log.Println("[main] starting GeoSwitch on :8080")
 	log.Fatal(server.ListenAndServe())
 }

@@ -1,104 +1,179 @@
 package proxy
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
 )
 
-func TestExitSelectorIsCalled(t *testing.T) {
-	var resolverCalls int
-	var exitSelectorCalls int
+func TestNewProxyHandler_HappyPath_UsesDefaultExit(t *testing.T) {
+	var gotReq *http.Request
 
-	// Fake resolver
-	resolver := func(ctx *RequestContext) (*url.URL, error) {
-		resolverCalls++
-		return url.Parse("https://example.com")
-	}
-
-	// Fake exit selector
-	exitSelector := func(r *http.Request, u *url.URL) (Exit, error) {
-		exitSelectorCalls++
-		return DefaultExit, nil
-	}
-
-	// Fake proxy (does nothing)
 	proxies := map[Exit]http.Handler{
 		DefaultExit: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotReq = r
 			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("ok"))
 		}),
 	}
 
-	handler := NewProxyHandler(resolver, exitSelector, proxies)
+	handler := NewProxyHandler(proxies, PathIntentParser)
 
-	req := httptest.NewRequest("GET", "/https://example.com", nil)
-	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/http://example.com/api?x=1", nil)
+	w := httptest.NewRecorder()
 
-	handler.ServeHTTP(rr, req)
+	handler.ServeHTTP(w, req)
 
-	if resolverCalls != 1 {
-		t.Fatalf("expected resolver to be called once, got %d", resolverCalls)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, w.Code)
 	}
 
-	if exitSelectorCalls != 1 {
-		t.Fatalf("expected exit selector to be called once, got %d", exitSelectorCalls)
+	if gotReq == nil {
+		t.Fatalf("expected proxy handler to be invoked")
+	}
+
+	if gotReq.URL.Scheme != "http" {
+		t.Errorf("expected scheme 'http', got '%s'", gotReq.URL.Scheme)
+	}
+
+	if gotReq.URL.Host != "example.com" {
+		t.Errorf("expected host 'example.com', got '%s'", gotReq.URL.Host)
+	}
+
+	if gotReq.URL.Path != "/api" {
+		t.Errorf("expected path '/api', got '%s'", gotReq.URL.Path)
+	}
+
+	if gotReq.URL.RawQuery != "x=1" {
+		t.Errorf("expected query 'x=1', got '%s'", gotReq.URL.RawQuery)
+	}
+
+	if gotReq.Host != "example.com" {
+		t.Errorf("expected request Host 'example.com', got '%s'", gotReq.Host)
+	}
+
+	if gotReq.RequestURI != "" {
+		t.Errorf("expected empty RequestURI, got '%s'", gotReq.RequestURI)
 	}
 }
 
-func TestUnknownExitReturnsBadGateway(t *testing.T) {
-	resolver := func(ctx *RequestContext) (*url.URL, error) {
-		return url.Parse("https://example.com")
-	}
-
-	exitSelector := func(r *http.Request, u *url.URL) (Exit, error) {
-		return Exit("nonexistent"), nil
-	}
+func TestNewProxyHandler_UsesHeaderExitWhenPresent(t *testing.T) {
+	const headerExit Exit = "test"
 
 	proxies := map[Exit]http.Handler{
 		DefaultExit: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("default"))
+		}),
+		headerExit: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("header-exit"))
 		}),
 	}
 
-	handler := NewProxyHandler(resolver, exitSelector, proxies)
+	handler := NewProxyHandler(
+		proxies,
+		HeaderExitParser("X-GeoSwitch-Exit"),
+		PathIntentParser,
+	)
 
-	req := httptest.NewRequest("GET", "/https://example.com", nil)
-	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/http://example.com", nil)
+	req.Header.Set("X-GeoSwitch-Exit", string(headerExit))
+	w := httptest.NewRecorder()
 
-	handler.ServeHTTP(rr, req)
+	handler.ServeHTTP(w, req)
 
-	if rr.Code != http.StatusBadGateway {
-		t.Fatalf("expected status %d, got %d", http.StatusBadGateway, rr.Code)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, w.Code)
+	}
+
+	if body := w.Body.String(); body != "header-exit" {
+		t.Errorf("expected body 'header-exit', got '%s'", body)
 	}
 }
 
-func TestCorrectProxyIsUsed(t *testing.T) {
-	var proxyCalled bool
-
-	resolver := func(ctx *RequestContext) (*url.URL, error) {
-		return url.Parse("https://example.com")
-	}
-
-	exitSelector := func(r *http.Request, u *url.URL) (Exit, error) {
-		return DefaultExit, nil
-	}
-
+func TestNewProxyHandler_ParseErrorReturnsBadRequest(t *testing.T) {
 	proxies := map[Exit]http.Handler{
 		DefaultExit: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			proxyCalled = true
 			w.WriteHeader(http.StatusOK)
 		}),
 	}
 
-	handler := NewProxyHandler(resolver, exitSelector, proxies)
+	failingParser := func(ctx *RequestContext) error {
+		return errors.New("parse error")
+	}
 
-	req := httptest.NewRequest("GET", "/https://example.com", nil)
-	rr := httptest.NewRecorder()
+	handler := NewProxyHandler(proxies, failingParser)
 
-	handler.ServeHTTP(rr, req)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
 
-	if !proxyCalled {
-		t.Fatal("expected proxy to be called, but it was not")
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, w.Code)
+	}
+
+	if body := w.Body.String(); body == "" {
+		t.Errorf("expected non-empty error body")
+	}
+}
+
+func TestNewProxyHandler_NoTargetReturnsBadRequest(t *testing.T) {
+	proxies := map[Exit]http.Handler{
+		DefaultExit: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+	}
+
+	// No parsers provided, so no target will be resolved
+	handler := NewProxyHandler(proxies)
+
+	req := httptest.NewRequest(http.MethodGet, "/no/target", nil)
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
+func TestNewProxyHandler_UnsupportedSchemeReturnsBadRequest(t *testing.T) {
+	proxies := map[Exit]http.Handler{
+		DefaultExit: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+	}
+
+	handler := NewProxyHandler(proxies, PathIntentParser)
+
+	req := httptest.NewRequest(http.MethodGet, "/ftp://example.com/resource", nil)
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
+func TestNewProxyHandler_UnknownExitReturnsBadGateway(t *testing.T) {
+	proxies := map[Exit]http.Handler{
+		DefaultExit: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+	}
+
+	handler := NewProxyHandler(proxies, PathIntentParser)
+
+	req := httptest.NewRequest(http.MethodGet, "/missing/http://example.com", nil)
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected status %d, got %d", http.StatusBadGateway, w.Code)
 	}
 }
