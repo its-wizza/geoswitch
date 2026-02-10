@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -293,11 +294,10 @@ func TestNewReverseProxy_ProxiesRequestBody(t *testing.T) {
 	defer targetServer.Close()
 
 	proxy := NewReverseProxy()
-
 	targetURL, _ := url.Parse(targetServer.URL)
 
 	testBody := "test request body"
-	req := httptest.NewRequest(http.MethodPost, "/test", nil)
+	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(testBody))
 	req.URL = targetURL
 	req.URL.Path = "/test"
 	req.Host = targetURL.Host
@@ -312,6 +312,10 @@ func TestNewReverseProxy_ProxiesRequestBody(t *testing.T) {
 	// Assert
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
+	}
+
+	if w.Body.String() != testBody {
+		t.Errorf("expected body '%s', got '%s'", testBody, w.Body.String())
 	}
 }
 
@@ -335,18 +339,17 @@ func TestNewReverseProxy_MultipleInstances(t *testing.T) {
 }
 
 func TestNewReverseProxy_HandlesHTTPSTarget(t *testing.T) {
-	// Arrange - Create a target server (httptest uses http, but we can test the URL handling)
-	targetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Create a TLS test server
+	targetServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(r.URL.Scheme))
+		w.Write([]byte("secure response"))
 	}))
 	defer targetServer.Close()
 
-	proxy := NewReverseProxy()
+	// Create proxy with the test server's transport (which trusts the test cert)
+	proxy := NewReverseProxy(WithTransport(targetServer.Client().Transport))
 
 	targetURL, _ := url.Parse(targetServer.URL)
-	// Simulate HTTPS by changing the scheme (the httptest server still uses http)
-	targetURL.Scheme = "https"
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	req.URL = targetURL
@@ -356,9 +359,15 @@ func TestNewReverseProxy_HandlesHTTPSTarget(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
-	// Act - This will fail to connect to HTTPS but shows the proxy accepts the setup
+	// Act
 	proxy.ServeHTTP(w, req)
 
-	// The assertion is that the proxy was invoked without panicking
-	// Actual connection failure is expected with httptest
+	// Assert
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
+	}
+
+	if got := w.Body.String(); got != "secure response" {
+		t.Errorf("expected body 'secure response', got '%s'", got)
+	}
 }

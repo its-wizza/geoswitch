@@ -41,28 +41,25 @@ func NewProxyHandler(proxies map[Exit]http.Handler, parsers ...IntentParser) htt
 		log.Printf("[handler] resolved target: %s", target.String())
 
 		// Extract exit from context
-		exit := ctx.ParsedExit
-		if exit == nil {
-			log.Printf("[handler] no exit parsed, using default exit")
-			def := DefaultExit
-			exit = &def
+		exit := DefaultExit
+		if ctx.ParsedExit != nil {
+			exit = *ctx.ParsedExit
 		}
 
-		proxy, ok := proxies[*exit]
+		proxy, ok := proxies[exit]
 		if !ok {
-			log.Printf("[handler] no proxy found for exit: %s", *exit)
+			log.Printf("[handler] no proxy found for exit: %s", exit)
 			http.Error(writer, "No proxy found for selected exit", http.StatusBadGateway)
 			return
 		}
 
-		log.Printf("[handler] selected exit: %s", *exit)
+		log.Printf("[handler] selected exit: %s", exit)
 
 		if len(ctx.RemainingPath) > 0 {
 			log.Printf("[handler] warning: unconsumed path segments: %v", ctx.RemainingPath)
 		}
 
-		// Rewrite request in-place for ReverseProxy.
-		// This is safe because the request is not reused after this point.
+		req = req.Clone(req.Context())
 		req.URL.Scheme = target.Scheme
 		req.URL.Host = target.Host
 		req.URL.Path = target.Path

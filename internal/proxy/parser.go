@@ -28,49 +28,13 @@ func PathIntentParser(ctx *RequestContext) error {
 		return nil
 	}
 
-	for i := 0; i < len(ctx.RemainingPath); i++ {
-		candidate := strings.Join(ctx.RemainingPath[i:], "/")
-
-		if ctx.Original.URL.RawQuery != "" {
-			candidate += "?" + ctx.Original.URL.RawQuery
-		}
-
-		u, err := url.Parse(candidate)
-		if err != nil || !u.IsAbs() {
-			continue
-		}
-
-		// Found absolute URL
-		ctx.ParsedTarget = u
-
-		control := ctx.RemainingPath[:i]
-
-		if ctx.ParsedExit == nil && len(control) > 0 {
-			// This parser consumes the first control segment as exit
-			exit := Exit(control[0])
-			ctx.ParsedExit = &exit
-			ctx.RemainingPath = control[1:]
-		} else {
-			// Exit already set elsewhere, preserve all control segments
-			ctx.RemainingPath = control
-		}
-
-		var exitStr string
-		if ctx.ParsedExit != nil {
-			exitStr = string(*ctx.ParsedExit)
-		} else {
-			exitStr = "<nil>"
-		}
-
-		log.Printf(
-			"[parser] path intent parsed: exit=%s, target=%s, remaining=%v",
-			exitStr,
-			u.String(),
-			ctx.RemainingPath,
-		)
-
+	targetURL, controlSegments := findTargetURLInPath(ctx)
+	if targetURL == nil {
 		return nil
 	}
+
+	ctx.ParsedTarget = targetURL
+	updateExitFromControl(ctx, controlSegments)
 
 	return nil
 }
@@ -81,7 +45,7 @@ func HeaderExitParser(headerName string) IntentParser {
 			return nil
 		}
 
-		val := ctx.Original.Header.Get(headerName)
+		val := strings.TrimSpace(ctx.Original.Header.Get(headerName))
 		if val == "" {
 			return nil
 		}
@@ -96,7 +60,7 @@ func HeaderExitParser(headerName string) IntentParser {
 func ParseRequestIntent(r *http.Request, parsers ...IntentParser) (*RequestContext, error) {
 	ctx := &RequestContext{
 		Original:      r,
-		RemainingPath: splitPath(r.URL.Path),
+		RemainingPath: SplitPath(r.URL.Path),
 	}
 
 	log.Printf("[parser] parsing request intent: %s %s, path segments: %v", r.Method, r.URL.Path, ctx.RemainingPath)
@@ -108,6 +72,76 @@ func ParseRequestIntent(r *http.Request, parsers ...IntentParser) (*RequestConte
 		}
 	}
 
+	logParsedIntent(ctx)
+
+	return ctx, nil
+}
+
+// SplitPath splits a URL path into its segments, ignoring a leading or trailing slash.
+// Empty paths return an empty slice. This is useful for path-based routing and parsing.
+//
+// Examples:
+//
+//	SplitPath("/foo/bar")     -> ["foo", "bar"]
+//	SplitPath("/foo/bar/")    -> ["foo", "bar"]
+//	SplitPath("foo/bar")      -> ["foo", "bar"]
+//	SplitPath("/")            -> []
+//	SplitPath("")             -> []
+func SplitPath(path string) []string {
+	// Trim (single) leading and trailing slashes
+	path = strings.TrimPrefix(path, "/")
+	path = strings.TrimSuffix(path, "/")
+	if path == "" {
+		return []string{}
+	}
+	return strings.Split(path, "/")
+}
+
+// findTargetURLInPath searches for an absolute URL in the remaining path segments.
+// Returns the URL and the control segments that preceded it.
+func findTargetURLInPath(ctx *RequestContext) (*url.URL, []string) {
+	for i := 0; i < len(ctx.RemainingPath); i++ {
+		candidate := strings.Join(ctx.RemainingPath[i:], "/")
+
+		if ctx.Original.URL.RawQuery != "" {
+			candidate += "?" + ctx.Original.URL.RawQuery
+		}
+
+		if u := parseAbsoluteURL(candidate); u != nil {
+			return u, ctx.RemainingPath[:i]
+		}
+	}
+	return nil, nil
+}
+
+// parseAbsoluteURL attempts to parse a string as an absolute URL.
+// Returns nil if parsing fails or the URL is not absolute.
+func parseAbsoluteURL(candidate string) *url.URL {
+	u, err := url.Parse(candidate)
+	if err != nil || !u.IsAbs() {
+		return nil
+	}
+	return u
+}
+
+// updateExitFromControl updates the exit and remaining path based on control segments.
+func updateExitFromControl(ctx *RequestContext, control []string) {
+	if ctx.ParsedExit == nil && len(control) > 0 {
+		// This parser consumes the first control segment as exit
+		exit := Exit(control[0])
+		ctx.ParsedExit = &exit
+		ctx.RemainingPath = control[1:]
+	} else if len(control) > 0 {
+		// Exit already set elsewhere, preserve all control segments
+		ctx.RemainingPath = control
+	} else {
+		// Explicitly set to empty slice for consistency
+		ctx.RemainingPath = []string{}
+	}
+}
+
+// logParsedIntent logs the parsed exit and target information.
+func logParsedIntent(ctx *RequestContext) {
 	var exitStr string
 	if ctx.ParsedExit != nil {
 		exitStr = string(*ctx.ParsedExit)
@@ -128,17 +162,4 @@ func ParseRequestIntent(r *http.Request, parsers ...IntentParser) (*RequestConte
 		targetStr,
 		ctx.RemainingPath,
 	)
-
-	return ctx, nil
-}
-
-// splitPath splits a URL path into its segments, ignoring bordering slashes.
-func splitPath(path string) []string {
-	// Trim leading and trailing slashes (supports empty segments for double slash)
-	path = strings.TrimPrefix(path, "/")
-	path = strings.TrimSuffix(path, "/")
-	if path == "" {
-		return nil
-	}
-	return strings.Split(path, "/")
 }
