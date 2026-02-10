@@ -16,7 +16,9 @@ func main() {
 	}
 
 	// Dummy exit for testing
-	const testExit proxy.Exit = "test"
+	var testExit = proxy.Exit{
+		Name: "test",
+	}
 	proxies[testExit] = proxy.NewReverseProxy()
 
 	// Build handler with intent parsers (ORDER MATTERS)

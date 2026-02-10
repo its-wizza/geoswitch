@@ -59,7 +59,9 @@ func TestNewProxyHandler_HappyPath_UsesDefaultExit(t *testing.T) {
 }
 
 func TestNewProxyHandler_UsesHeaderExitWhenPresent(t *testing.T) {
-	const headerExit Exit = "test"
+	var headerExit = Exit{
+		Name: "header-exit",
+	}
 
 	proxies := map[Exit]http.Handler{
 		DefaultExit: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +81,7 @@ func TestNewProxyHandler_UsesHeaderExitWhenPresent(t *testing.T) {
 	)
 
 	req := httptest.NewRequest(http.MethodGet, "/http://example.com", nil)
-	req.Header.Set("X-GeoSwitch-Exit", string(headerExit))
+	req.Header.Set("X-GeoSwitch-Exit", headerExit.Name)
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, req)

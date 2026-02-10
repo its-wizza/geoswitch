@@ -78,7 +78,7 @@ func TestPathIntentParser_ParsesExitAndRemainingPath(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if ctx.ParsedExit == nil || *ctx.ParsedExit != "test" {
+	if ctx.ParsedExit == nil || ctx.ParsedExit.Name != "test" {
 		t.Fatalf("expected exit 'test', got %v", ctx.ParsedExit)
 	}
 
@@ -90,7 +90,9 @@ func TestPathIntentParser_ParsesExitAndRemainingPath(t *testing.T) {
 func TestPathIntentParser_DoesNotOverrideExistingExit(t *testing.T) {
 	req := httptest.NewRequest("GET", "/foo/bar/http://example.com", nil)
 
-	existing := Exit("pre")
+	existing := Exit{
+		Name: "pre",
+	}
 	ctx := &RequestContext{
 		Original:      req,
 		ParsedExit:    &existing,
@@ -101,7 +103,7 @@ func TestPathIntentParser_DoesNotOverrideExistingExit(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if ctx.ParsedExit == nil || *ctx.ParsedExit != "pre" {
+	if ctx.ParsedExit == nil || ctx.ParsedExit.Name != "pre" {
 		t.Fatalf("expected exit 'pre', got %v", ctx.ParsedExit)
 	}
 
@@ -122,7 +124,7 @@ func TestHeaderExitParser_SetsExitFromHeader(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if ctx.ParsedExit == nil || *ctx.ParsedExit != "my-exit" {
+	if ctx.ParsedExit == nil || ctx.ParsedExit.Name != "my-exit" {
 		t.Fatalf("expected exit 'my-exit', got %v", ctx.ParsedExit)
 	}
 }
@@ -130,7 +132,9 @@ func TestHeaderExitParser_SetsExitFromHeader(t *testing.T) {
 func TestHeaderExitParser_DoesNotOverrideExistingExit(t *testing.T) {
 	parser := HeaderExitParser("X-Exit")
 
-	existing := Exit("existing")
+	existing := Exit{
+		Name: "existing",
+	}
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("X-Exit", "new")
 
@@ -140,7 +144,7 @@ func TestHeaderExitParser_DoesNotOverrideExistingExit(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if ctx.ParsedExit == nil || *ctx.ParsedExit != "existing" {
+	if ctx.ParsedExit == nil || ctx.ParsedExit.Name != "existing" {
 		t.Fatalf("expected exit 'existing', got %v", ctx.ParsedExit)
 	}
 }
@@ -163,7 +167,7 @@ func TestParseRequestIntent_HeaderThenPathParser(t *testing.T) {
 		t.Fatalf("expected target 'http://example.com/foo', got %v", ctx.ParsedTarget)
 	}
 
-	if ctx.ParsedExit == nil || *ctx.ParsedExit != "header-exit" {
+	if ctx.ParsedExit == nil || ctx.ParsedExit.Name != "header-exit" {
 		t.Fatalf("expected exit 'header-exit', got %v", ctx.ParsedExit)
 	}
 }
@@ -253,7 +257,7 @@ func TestPathIntentParser_UnconsumedSegments(t *testing.T) {
 		t.Errorf("expected target '%s', got '%s'", expected, got)
 	}
 
-	if ctx.ParsedExit == nil || string(*ctx.ParsedExit) != "exit" {
+	if ctx.ParsedExit == nil || ctx.ParsedExit.Name != "exit" {
 		t.Errorf("expected exit 'exit', got %v", ctx.ParsedExit)
 	}
 

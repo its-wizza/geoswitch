@@ -17,9 +17,13 @@ type RequestContext struct {
 	RemainingPath []string // unconsumed path segments
 }
 
-type Exit string
+type Exit struct {
+	Name string
+}
 
-const DefaultExit Exit = "default"
+var DefaultExit = Exit{
+	Name: "default",
+}
 
 type IntentParser func(*RequestContext) error
 
@@ -50,7 +54,9 @@ func HeaderExitParser(headerName string) IntentParser {
 			return nil
 		}
 
-		exit := Exit(val)
+		exit := Exit{
+			Name: val,
+		}
 		ctx.ParsedExit = &exit
 		log.Printf("[parser] header exit parser: found exit '%s' from header '%s'", exit, headerName)
 		return nil
@@ -128,7 +134,9 @@ func parseAbsoluteURL(candidate string) *url.URL {
 func updateExitFromControl(ctx *RequestContext, control []string) {
 	if ctx.ParsedExit == nil && len(control) > 0 {
 		// This parser consumes the first control segment as exit
-		exit := Exit(control[0])
+		exit := Exit{
+			Name: control[0],
+		}
 		ctx.ParsedExit = &exit
 		ctx.RemainingPath = control[1:]
 	} else if len(control) > 0 {
@@ -144,7 +152,7 @@ func updateExitFromControl(ctx *RequestContext, control []string) {
 func logParsedIntent(ctx *RequestContext) {
 	var exitStr string
 	if ctx.ParsedExit != nil {
-		exitStr = string(*ctx.ParsedExit)
+		exitStr = ctx.ParsedExit.Name
 	} else {
 		exitStr = "<nil>"
 	}
