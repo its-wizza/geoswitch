@@ -1,0 +1,18 @@
+default_exit: us-west
+
+exits:
+  us-west:
+    provider: aws
+    country: us
+  
+  eu-central:
+    provider: hetzner
+    country: de
+  
+  asia-pacific:
+    provider: digitalocean
+    country: sg
+  
+  direct:
+    provider: direct
+    country: us

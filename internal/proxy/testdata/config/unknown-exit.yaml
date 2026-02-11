@@ -1,0 +1,6 @@
+default_exit: nonexistent
+
+exits:
+  us-west:
+    provider: aws
+    country: us

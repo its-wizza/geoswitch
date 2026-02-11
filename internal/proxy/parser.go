@@ -17,14 +17,6 @@ type RequestContext struct {
 	RemainingPath []string // unconsumed path segments
 }
 
-type Exit struct {
-	Name string
-}
-
-var DefaultExit = Exit{
-	Name: "default",
-}
-
 type IntentParser func(*RequestContext) error
 
 func PathIntentParser(ctx *RequestContext) error {
@@ -40,6 +32,13 @@ func PathIntentParser(ctx *RequestContext) error {
 	ctx.ParsedTarget = targetURL
 	updateExitFromControl(ctx, controlSegments)
 
+	if ctx.ParsedExit != nil {
+		log.Printf("[parser] path intent parser: found target '%s' and exit '%s' from path", targetURL.String(), ctx.ParsedExit.Name)
+		return nil
+	} else {
+		log.Printf("[parser] path intent parser: found target '%s' from path", targetURL.String())
+	}
+
 	return nil
 }
 
@@ -54,11 +53,8 @@ func HeaderExitParser(headerName string) IntentParser {
 			return nil
 		}
 
-		exit := Exit{
-			Name: val,
-		}
-		ctx.ParsedExit = &exit
-		log.Printf("[parser] header exit parser: found exit '%s' from header '%s'", exit, headerName)
+		ctx.ParsedExit = &Exit{Name: val}
+		log.Printf("[parser] header exit parser: found exit '%s' from header '%s'", ctx.ParsedExit.Name, headerName)
 		return nil
 	}
 }
@@ -134,9 +130,7 @@ func parseAbsoluteURL(candidate string) *url.URL {
 func updateExitFromControl(ctx *RequestContext, control []string) {
 	if ctx.ParsedExit == nil && len(control) > 0 {
 		// This parser consumes the first control segment as exit
-		exit := Exit{
-			Name: control[0],
-		}
+		exit := Exit{Name: control[0]}
 		ctx.ParsedExit = &exit
 		ctx.RemainingPath = control[1:]
 	} else if len(control) > 0 {

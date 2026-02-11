@@ -1,0 +1,10 @@
+default_exit: us-west
+
+exits:
+  us-west:
+    # Missing required fields
+    country: us
+  
+  eu-central:
+    provider: ""
+    country: ""

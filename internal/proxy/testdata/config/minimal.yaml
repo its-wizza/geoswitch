@@ -1,0 +1,6 @@
+default_exit: default
+
+exits:
+  default:
+    provider: direct
+    country: us

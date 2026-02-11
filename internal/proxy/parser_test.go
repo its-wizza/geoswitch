@@ -90,9 +90,7 @@ func TestPathIntentParser_ParsesExitAndRemainingPath(t *testing.T) {
 func TestPathIntentParser_DoesNotOverrideExistingExit(t *testing.T) {
 	req := httptest.NewRequest("GET", "/foo/bar/http://example.com", nil)
 
-	existing := Exit{
-		Name: "pre",
-	}
+	existing := Exit{Name: "pre"}
 	ctx := &RequestContext{
 		Original:      req,
 		ParsedExit:    &existing,
@@ -132,9 +130,7 @@ func TestHeaderExitParser_SetsExitFromHeader(t *testing.T) {
 func TestHeaderExitParser_DoesNotOverrideExistingExit(t *testing.T) {
 	parser := HeaderExitParser("X-Exit")
 
-	existing := Exit{
-		Name: "existing",
-	}
+	existing := Exit{Name: "existing"}
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("X-Exit", "new")
 
