@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -11,9 +12,9 @@ import (
 	"geoswitch/internal/proxy"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
-	"github.com/docker/go-connections/nat"
 )
 
 type GluetunProvider struct {
@@ -21,6 +22,7 @@ type GluetunProvider struct {
 	runtimes map[string]*exitRuntime
 	docker   *client.Client
 	network  string
+	image    string
 }
 
 func (p *GluetunProvider) GetHandler(
@@ -50,8 +52,12 @@ func (p *GluetunProvider) GetHandler(
 	_, err := p.docker.ContainerInspect(ctx, containerName)
 	if err != nil {
 		log.Printf("[gluetun] container '%s' does not exist, creating it", containerName)
+		// Pull image if it doesn't exist
+		if err := p.ensureImage(ctx); err != nil {
+			return nil, err
+		}
+		// Create and start container
 		if err := p.createContainer(ctx, containerName, cfg); err != nil {
-			log.Printf("[gluetun] failed to create container '%s': %v", containerName, err)
 			return nil, err
 		}
 	} else {
@@ -95,6 +101,25 @@ func (p *GluetunProvider) ensureNetwork(ctx context.Context) error {
 	return err
 }
 
+func (p *GluetunProvider) ensureImage(ctx context.Context) error {
+	_, err := p.docker.ImageInspect(ctx, p.image)
+	if err == nil {
+		return nil // image already exists
+	}
+
+	log.Printf("[gluetun] pulling image %s", p.image)
+
+	reader, err := p.docker.ImagePull(ctx, p.image, image.PullOptions{})
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	// Drain output (required or pull won't complete properly)
+	_, err = io.Copy(io.Discard, reader)
+	return err
+}
+
 func (p *GluetunProvider) createContainer(
 	ctx context.Context,
 	name string,
@@ -112,11 +137,8 @@ func (p *GluetunProvider) createContainer(
 	resp, err := p.docker.ContainerCreate(
 		ctx,
 		&container.Config{
-			Image: "qmcgaw/gluetun:latest",
+			Image: p.image,
 			Env:   env,
-			ExposedPorts: nat.PortSet{
-				"8888/tcp": struct{}{},
-			},
 		},
 		&container.HostConfig{
 			AutoRemove: false,
@@ -139,7 +161,27 @@ func (p *GluetunProvider) createContainer(
 	if err != nil {
 		log.Printf("[gluetun] failed to start container '%s': %v", name, err)
 	}
+
+	p.streamLogs(ctx, resp.ID)
+
 	return err
+}
+
+func (p *GluetunProvider) streamLogs(ctx context.Context, containerID string) {
+	go func() {
+		reader, err := p.docker.ContainerLogs(ctx, containerID, container.LogsOptions{
+			ShowStdout: true,
+			ShowStderr: true,
+			Follow:     true,
+		})
+		if err != nil {
+			log.Printf("[gluetun] log stream error: %v", err)
+			return
+		}
+		defer reader.Close()
+
+		io.Copy(log.Writer(), reader)
+	}()
 }
 
 func NewGluetunProvider(network string) (*GluetunProvider, error) {
@@ -158,5 +200,6 @@ func NewGluetunProvider(network string) (*GluetunProvider, error) {
 		runtimes: make(map[string]*exitRuntime),
 		docker:   cli,
 		network:  network,
+		image:    "qmcgaw/gluetun:v3.41.0", // pin to a specific version
 	}, nil
 }
