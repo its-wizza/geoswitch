@@ -8,12 +8,15 @@ import (
 
 	"geoswitch/internal/config"
 	"geoswitch/internal/proxy"
+
+	"github.com/docker/docker/client"
 )
 
 type GluetunProvider struct {
 	mu       sync.Mutex
 	runtimes map[string]*exitRuntime
-	// TODO: Add docker client and network when implementing container management
+	docker   *client.Client
+	network  string
 }
 
 func (p *GluetunProvider) GetHandler(
