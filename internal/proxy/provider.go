@@ -1,12 +1,14 @@
 package proxy
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"sync"
 )
 
 type ExitHandlerProvider interface {
-	GetHandler(ctx *ParsedRequest, exitName string, cfg ExitConfig) (http.Handler, error)
+	GetHandler(ctx *RequestContext, exitName string, cfg ExitConfig) (http.Handler, error)
 }
 
 type StaticProvider struct {
@@ -14,7 +16,7 @@ type StaticProvider struct {
 }
 
 func (p *StaticProvider) GetHandler(
-	_ *ParsedRequest,
+	_ *RequestContext,
 	exitName string,
 	_ ExitConfig,
 ) (http.Handler, error) {
@@ -26,7 +28,34 @@ func (p *StaticProvider) GetHandler(
 }
 
 type GluetunProvider struct {
-	// docker client
-	// container cache
-	// locks
+	mu       sync.Mutex
+	runtimes map[string]*exitRuntime
+}
+
+func (p *GluetunProvider) GetHandler(
+	ctx context.Context,
+	exitName string,
+	cfg ExitConfig,
+) (http.Handler, error) {
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if rt, ok := p.runtimes[exitName]; ok {
+		return rt.handler, nil
+	}
+
+	// TODO: start container (stub for now)
+	handler := NewReverseProxy() // placeholder
+
+	rt := &exitRuntime{
+		handler: handler,
+	}
+
+	p.runtimes[exitName] = rt
+	return handler, nil
+}
+
+type exitRuntime struct {
+	handler http.Handler
 }

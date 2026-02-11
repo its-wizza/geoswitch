@@ -149,7 +149,7 @@ func TestNewProxyHandler_ParseErrorReturnsBadRequest(t *testing.T) {
 		}),
 	}
 
-	failingParser := func(ctx *ParsedRequest) error {
+	failingParser := func(ctx *RequestContext) error {
 		return errors.New("parse error")
 	}
 

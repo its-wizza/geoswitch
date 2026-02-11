@@ -41,7 +41,7 @@ func TestSplitPath_BasicAndEdgeCases(t *testing.T) {
 func TestPathIntentParser_ParsesTargetWithoutExit(t *testing.T) {
 	req := httptest.NewRequest("GET", "/http://example.com/path?x=1", nil)
 
-	ctx := &ParsedRequest{
+	ctx := &RequestContext{
 		Original:      req,
 		RemainingPath: SplitPath(req.URL.Path),
 	}
@@ -70,7 +70,7 @@ func TestPathIntentParser_ParsesTargetWithoutExit(t *testing.T) {
 func TestPathIntentParser_ParsesExitAndRemainingPath(t *testing.T) {
 	req := httptest.NewRequest("GET", "/test/extra/http://example.com/path", nil)
 
-	ctx := &ParsedRequest{
+	ctx := &RequestContext{
 		Original:      req,
 		RemainingPath: SplitPath(req.URL.Path),
 	}
@@ -92,7 +92,7 @@ func TestPathIntentParser_DoesNotOverrideExistingExit(t *testing.T) {
 	req := httptest.NewRequest("GET", "/foo/bar/http://example.com", nil)
 
 	existing := Exit{Name: "pre"}
-	ctx := &ParsedRequest{
+	ctx := &RequestContext{
 		Original:      req,
 		Exit:          &existing,
 		RemainingPath: SplitPath(req.URL.Path),
@@ -117,7 +117,7 @@ func TestHeaderExitParser_SetsExitFromHeader(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("X-Exit", "my-exit")
 
-	ctx := &ParsedRequest{Original: req}
+	ctx := &RequestContext{Original: req}
 
 	if err := parser(ctx); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -135,7 +135,7 @@ func TestHeaderExitParser_DoesNotOverrideExistingExit(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("X-Exit", "new")
 
-	ctx := &ParsedRequest{Original: req, Exit: &existing}
+	ctx := &RequestContext{Original: req, Exit: &existing}
 
 	if err := parser(ctx); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -172,7 +172,7 @@ func TestParseRequestIntent_HeaderThenPathParser(t *testing.T) {
 func TestPathIntentParser_MultipleURLsInPath(t *testing.T) {
 	// What happens with /http://example.com/http://another.com?
 	req := httptest.NewRequest("GET", "/http://example.com/http://another.com", nil)
-	ctx := &ParsedRequest{
+	ctx := &RequestContext{
 		Original:      req,
 		RemainingPath: SplitPath(req.URL.Path),
 	}
@@ -191,7 +191,7 @@ func TestPathIntentParser_URLWithFragment(t *testing.T) {
 	// Fragments should be preserved in the target URL
 	req := httptest.NewRequest("GET", "/http://example.com/path#section", nil)
 
-	ctx := &ParsedRequest{
+	ctx := &RequestContext{
 		Original:      req,
 		RemainingPath: SplitPath(req.URL.Path),
 	}
@@ -213,7 +213,7 @@ func TestPathIntentParser_URLWithFragment(t *testing.T) {
 func TestPathIntentParser_URLWithEncodedCharacters(t *testing.T) {
 	req := httptest.NewRequest("GET", "/http://example.com/path%20with%20spaces", nil)
 
-	ctx := &ParsedRequest{
+	ctx := &RequestContext{
 		Original:      req,
 		RemainingPath: SplitPath(req.URL.Path),
 	}
@@ -234,7 +234,7 @@ func TestPathIntentParser_URLWithEncodedCharacters(t *testing.T) {
 func TestPathIntentParser_UnconsumedSegments(t *testing.T) {
 	req := httptest.NewRequest("GET", "/exit/http://example.com/extra/segments", nil)
 
-	ctx := &ParsedRequest{
+	ctx := &RequestContext{
 		Original:      req,
 		RemainingPath: SplitPath(req.URL.Path),
 	}
@@ -285,7 +285,7 @@ func TestHeaderExitParser_InvalidExitNames(t *testing.T) {
 			req := httptest.NewRequest("GET", "/", nil)
 			req.Header.Set("X-Exit", tt.headerVal)
 
-			ctx := &ParsedRequest{
+			ctx := &RequestContext{
 				Original:      req,
 				RemainingPath: []string{},
 			}
@@ -336,7 +336,7 @@ func TestSplitPath_EdgeCases(t *testing.T) {
 func TestPathIntentParser_NoURLInPath(t *testing.T) {
 	req := httptest.NewRequest("GET", "/just/some/path", nil)
 
-	ctx := &ParsedRequest{
+	ctx := &RequestContext{
 		Original:      req,
 		RemainingPath: SplitPath(req.URL.Path),
 	}
@@ -355,7 +355,7 @@ func TestPathIntentParser_SkipsWhenTargetAlreadySet(t *testing.T) {
 	req := httptest.NewRequest("GET", "/http://example.com", nil)
 
 	existingTarget, _ := url.Parse("http://existing.com")
-	ctx := &ParsedRequest{
+	ctx := &RequestContext{
 		Original:      req,
 		Target:        existingTarget,
 		RemainingPath: SplitPath(req.URL.Path),
@@ -401,7 +401,7 @@ func TestHeaderExitParser_MissingHeader(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	// No X-Exit header set
 
-	ctx := &ParsedRequest{
+	ctx := &RequestContext{
 		Original:      req,
 		RemainingPath: []string{},
 	}

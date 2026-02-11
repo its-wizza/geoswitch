@@ -7,8 +7,8 @@ import (
 	"strings"
 )
 
-// ParsedRequest holds information extracted from an HTTP request to be used by parsers.
-type ParsedRequest struct {
+// RequestContext holds information extracted from an HTTP request to be used by parsers.
+type RequestContext struct {
 	Original *http.Request // original HTTP request
 
 	Target *url.URL // nil if none explicitly requested
@@ -17,9 +17,9 @@ type ParsedRequest struct {
 	RemainingPath []string // unconsumed path segments
 }
 
-type IntentParser func(*ParsedRequest) error
+type IntentParser func(*RequestContext) error
 
-func PathIntentParser(ctx *ParsedRequest) error {
+func PathIntentParser(ctx *RequestContext) error {
 	if ctx.Target != nil || len(ctx.RemainingPath) == 0 {
 		return nil
 	}
@@ -43,7 +43,7 @@ func PathIntentParser(ctx *ParsedRequest) error {
 }
 
 func HeaderExitParser(headerName string) IntentParser {
-	return func(ctx *ParsedRequest) error {
+	return func(ctx *RequestContext) error {
 		if ctx.Exit != nil {
 			return nil
 		}
@@ -59,8 +59,8 @@ func HeaderExitParser(headerName string) IntentParser {
 	}
 }
 
-func ParseRequestIntent(r *http.Request, parsers ...IntentParser) (*ParsedRequest, error) {
-	ctx := &ParsedRequest{
+func ParseRequestIntent(r *http.Request, parsers ...IntentParser) (*RequestContext, error) {
+	ctx := &RequestContext{
 		Original:      r,
 		RemainingPath: SplitPath(r.URL.Path),
 	}
@@ -101,7 +101,7 @@ func SplitPath(path string) []string {
 
 // findTargetURLInPath searches for an absolute URL in the remaining path segments.
 // Returns the URL and the control segments that preceded it.
-func findTargetURLInPath(ctx *ParsedRequest) (*url.URL, []string) {
+func findTargetURLInPath(ctx *RequestContext) (*url.URL, []string) {
 	for i := 0; i < len(ctx.RemainingPath); i++ {
 		candidate := strings.Join(ctx.RemainingPath[i:], "/")
 
@@ -127,7 +127,7 @@ func parseAbsoluteURL(candidate string) *url.URL {
 }
 
 // updateExitFromControl updates the exit and remaining path based on control segments.
-func updateExitFromControl(ctx *ParsedRequest, control []string) {
+func updateExitFromControl(ctx *RequestContext, control []string) {
 	if ctx.Exit == nil && len(control) > 0 {
 		// This parser consumes the first control segment as exit
 		exit := Exit{Name: control[0]}
@@ -143,7 +143,7 @@ func updateExitFromControl(ctx *ParsedRequest, control []string) {
 }
 
 // logParsedIntent logs the parsed exit and target information.
-func logParsedIntent(ctx *ParsedRequest) {
+func logParsedIntent(ctx *RequestContext) {
 	var exitStr string
 	if ctx.Exit != nil {
 		exitStr = ctx.Exit.Name
