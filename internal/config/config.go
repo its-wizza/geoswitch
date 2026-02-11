@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
@@ -23,13 +24,16 @@ type Config struct {
 
 // LoadConfig reads and parses a YAML configuration file.
 func LoadConfig(path string) (*Config, error) {
+	log.Printf("[config] loading configuration from %s", path)
 	data, err := os.ReadFile(path)
 	if err != nil {
+		log.Printf("[config] failed to read config file: %v", err)
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
 	var config Config
 	if err := yaml.Unmarshal(data, &config); err != nil {
+		log.Printf("[config] failed to parse YAML: %v", err)
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
@@ -40,9 +44,11 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	if err := config.Validate(); err != nil {
+		log.Printf("[config] validation failed: %v", err)
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
+	log.Printf("[config] successfully loaded config with default exit '%s' and %d exits", config.DefaultExit, len(config.Exits))
 	return &config, nil
 }
 
@@ -67,9 +73,6 @@ func (c *Config) Validate() error {
 		if exit.Country == "" {
 			return fmt.Errorf("exit '%s': country is required", name)
 		}
-		// if len(exit.Country) != 2 {
-		// 	return fmt.Errorf("exit '%s': country must be a 2-letter code, got '%s'", name, exit.Country)
-		// }
 	}
 
 	return nil
@@ -84,6 +87,7 @@ func (r *ConfigExitResolver) Resolve(exit *types.Exit) (string, ExitConfig, erro
 	if exit == nil || exit.Name == "" {
 		name := r.Config.DefaultExit
 		cfg, _ := r.Config.GetExit(name)
+		log.Printf("[resolver] using default exit: %s", name)
 		return name, cfg, nil
 	}
 

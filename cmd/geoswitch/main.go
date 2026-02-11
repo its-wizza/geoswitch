@@ -7,11 +7,10 @@ import (
 	"geoswitch/internal/config"
 	"geoswitch/internal/handler"
 	"geoswitch/internal/provider"
-	"geoswitch/internal/proxy"
 )
 
 func main() {
-	log.Println("[main] initialising geoswitch")
+	log.Println("[main] initialising GeoSwitch")
 
 	cfg := &config.Config{
 		DefaultExit: "us",
@@ -28,20 +27,19 @@ func main() {
 	}
 
 	if err := cfg.Validate(); err != nil {
-		log.Fatalf("invalid config: %v", err)
+		log.Fatalf("[main] invalid config: %v", err)
 	}
+
+	log.Println("[main] configuration validated successfully")
 
 	resolver := &config.ConfigExitResolver{
 		Config: cfg,
 	}
 
-	proxies := make(map[string]http.Handler)
-	for name := range cfg.Exits {
-		proxies[name] = proxy.NewReverseProxy()
-	}
-
-	prov := &provider.StaticProvider{
-		Handlers: proxies,
+	log.Printf("[main] initialising Gluetun provider")
+	prov, err := provider.NewGluetunProvider("geoswitch-net")
+	if err != nil {
+		log.Fatalf("[main] failed to create Gluetun provider: %v", err)
 	}
 
 	handler := handler.NewProxyHandler(

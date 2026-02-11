@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 
 	"geoswitch/internal/config"
@@ -19,7 +20,16 @@ func (p *StaticProvider) GetHandler(
 ) (http.Handler, error) {
 	h, ok := p.Handlers[exitName]
 	if !ok {
+		log.Printf("[static] no handler found for exit '%s'", exitName)
 		return nil, fmt.Errorf("no handler for exit '%s'", exitName)
 	}
+	log.Printf("[static] returning handler for exit '%s'", exitName)
 	return h, nil
+}
+
+func NewStaticProvider(handlers map[string]http.Handler) *StaticProvider {
+	log.Printf("[static] initializing StaticProvider with %d handlers", len(handlers))
+	return &StaticProvider{
+		Handlers: handlers,
+	}
 }

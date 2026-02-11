@@ -37,7 +37,7 @@ func TestNewProxyHandler_HappyPath_UsesDefaultExit(t *testing.T) {
 
 	handler := NewProxyHandler(
 		resolver,
-		&provider.StaticProvider{Handlers: proxies},
+		provider.NewStaticProvider(proxies),
 		PathIntentParser,
 	)
 
@@ -111,7 +111,7 @@ func TestNewProxyHandler_UsesHeaderExitWhenPresent(t *testing.T) {
 
 	handler := NewProxyHandler(
 		resolver,
-		&provider.StaticProvider{Handlers: proxies},
+		provider.NewStaticProvider(proxies),
 		HeaderExitParser("X-GeoSwitch-Exit"),
 		PathIntentParser,
 	)
@@ -158,7 +158,7 @@ func TestNewProxyHandler_ParseErrorReturnsBadRequest(t *testing.T) {
 
 	handler := NewProxyHandler(
 		resolver,
-		&provider.StaticProvider{Handlers: proxies},
+		provider.NewStaticProvider(proxies),
 		failingParser,
 	)
 
@@ -198,7 +198,7 @@ func TestNewProxyHandler_NoTargetReturnsBadRequest(t *testing.T) {
 	}
 
 	// No parsers provided, so no target will be resolved
-	handler := NewProxyHandler(resolver, &provider.StaticProvider{Handlers: proxies})
+	handler := NewProxyHandler(resolver, provider.NewStaticProvider(proxies))
 
 	req := httptest.NewRequest(http.MethodGet, "/no/target", nil)
 	w := httptest.NewRecorder()
@@ -233,7 +233,7 @@ func TestNewProxyHandler_UnsupportedSchemeReturnsBadRequest(t *testing.T) {
 
 	handler := NewProxyHandler(
 		resolver,
-		&provider.StaticProvider{Handlers: proxies},
+		provider.NewStaticProvider(proxies),
 		PathIntentParser,
 	)
 
@@ -270,7 +270,7 @@ func TestNewProxyHandler_UnknownExitReturnsBadRequest(t *testing.T) {
 
 	handler := NewProxyHandler(
 		resolver,
-		&provider.StaticProvider{Handlers: proxies},
+		provider.NewStaticProvider(proxies),
 		PathIntentParser,
 	)
 
@@ -312,7 +312,7 @@ func TestNewProxyHandler_MissingProxyForExit(t *testing.T) {
 
 	handler := NewProxyHandler(
 		resolver,
-		&provider.StaticProvider{Handlers: proxies},
+		provider.NewStaticProvider(proxies),
 		PathIntentParser,
 	)
 
@@ -352,7 +352,7 @@ func TestNewProxyHandler_HTTPSScheme(t *testing.T) {
 
 	handler := NewProxyHandler(
 		resolver,
-		&provider.StaticProvider{Handlers: proxies},
+		provider.NewStaticProvider(proxies),
 		PathIntentParser,
 	)
 
@@ -404,7 +404,7 @@ func TestNewProxyHandler_PreservesHTTPMethod(t *testing.T) {
 
 			handler := NewProxyHandler(
 				resolver,
-				&provider.StaticProvider{Handlers: proxies},
+				provider.NewStaticProvider(proxies),
 				PathIntentParser,
 			)
 
