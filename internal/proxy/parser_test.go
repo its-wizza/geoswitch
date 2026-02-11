@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -40,7 +41,7 @@ func TestSplitPath_BasicAndEdgeCases(t *testing.T) {
 func TestPathIntentParser_ParsesTargetWithoutExit(t *testing.T) {
 	req := httptest.NewRequest("GET", "/http://example.com/path?x=1", nil)
 
-	ctx := &RequestContext{
+	ctx := &ParsedRequest{
 		Original:      req,
 		RemainingPath: SplitPath(req.URL.Path),
 	}
@@ -49,16 +50,16 @@ func TestPathIntentParser_ParsesTargetWithoutExit(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if ctx.ParsedTarget == nil {
+	if ctx.Target == nil {
 		t.Fatalf("expected ParsedTarget to be set")
 	}
 
-	if got := ctx.ParsedTarget.String(); got != "http://example.com/path?x=1" {
+	if got := ctx.Target.String(); got != "http://example.com/path?x=1" {
 		t.Errorf("expected target 'http://example.com/path?x=1', got '%s'", got)
 	}
 
-	if ctx.ParsedExit != nil {
-		t.Errorf("expected no exit, got %v", *ctx.ParsedExit)
+	if ctx.Exit != nil {
+		t.Errorf("expected no exit, got %v", *ctx.Exit)
 	}
 
 	if len(ctx.RemainingPath) != 0 {
@@ -69,7 +70,7 @@ func TestPathIntentParser_ParsesTargetWithoutExit(t *testing.T) {
 func TestPathIntentParser_ParsesExitAndRemainingPath(t *testing.T) {
 	req := httptest.NewRequest("GET", "/test/extra/http://example.com/path", nil)
 
-	ctx := &RequestContext{
+	ctx := &ParsedRequest{
 		Original:      req,
 		RemainingPath: SplitPath(req.URL.Path),
 	}
@@ -78,8 +79,8 @@ func TestPathIntentParser_ParsesExitAndRemainingPath(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if ctx.ParsedExit == nil || ctx.ParsedExit.Name != "test" {
-		t.Fatalf("expected exit 'test', got %v", ctx.ParsedExit)
+	if ctx.Exit == nil || ctx.Exit.Name != "test" {
+		t.Fatalf("expected exit 'test', got %v", ctx.Exit)
 	}
 
 	if len(ctx.RemainingPath) != 1 || ctx.RemainingPath[0] != "extra" {
@@ -91,9 +92,9 @@ func TestPathIntentParser_DoesNotOverrideExistingExit(t *testing.T) {
 	req := httptest.NewRequest("GET", "/foo/bar/http://example.com", nil)
 
 	existing := Exit{Name: "pre"}
-	ctx := &RequestContext{
+	ctx := &ParsedRequest{
 		Original:      req,
-		ParsedExit:    &existing,
+		Exit:          &existing,
 		RemainingPath: SplitPath(req.URL.Path),
 	}
 
@@ -101,8 +102,8 @@ func TestPathIntentParser_DoesNotOverrideExistingExit(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if ctx.ParsedExit == nil || ctx.ParsedExit.Name != "pre" {
-		t.Fatalf("expected exit 'pre', got %v", ctx.ParsedExit)
+	if ctx.Exit == nil || ctx.Exit.Name != "pre" {
+		t.Fatalf("expected exit 'pre', got %v", ctx.Exit)
 	}
 
 	if len(ctx.RemainingPath) != 2 || ctx.RemainingPath[0] != "foo" || ctx.RemainingPath[1] != "bar" {
@@ -116,14 +117,14 @@ func TestHeaderExitParser_SetsExitFromHeader(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("X-Exit", "my-exit")
 
-	ctx := &RequestContext{Original: req}
+	ctx := &ParsedRequest{Original: req}
 
 	if err := parser(ctx); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if ctx.ParsedExit == nil || ctx.ParsedExit.Name != "my-exit" {
-		t.Fatalf("expected exit 'my-exit', got %v", ctx.ParsedExit)
+	if ctx.Exit == nil || ctx.Exit.Name != "my-exit" {
+		t.Fatalf("expected exit 'my-exit', got %v", ctx.Exit)
 	}
 }
 
@@ -134,14 +135,14 @@ func TestHeaderExitParser_DoesNotOverrideExistingExit(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("X-Exit", "new")
 
-	ctx := &RequestContext{Original: req, ParsedExit: &existing}
+	ctx := &ParsedRequest{Original: req, Exit: &existing}
 
 	if err := parser(ctx); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if ctx.ParsedExit == nil || ctx.ParsedExit.Name != "existing" {
-		t.Fatalf("expected exit 'existing', got %v", ctx.ParsedExit)
+	if ctx.Exit == nil || ctx.Exit.Name != "existing" {
+		t.Fatalf("expected exit 'existing', got %v", ctx.Exit)
 	}
 }
 
@@ -159,19 +160,19 @@ func TestParseRequestIntent_HeaderThenPathParser(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if ctx.ParsedTarget == nil || ctx.ParsedTarget.String() != "http://example.com/foo" {
-		t.Fatalf("expected target 'http://example.com/foo', got %v", ctx.ParsedTarget)
+	if ctx.Target == nil || ctx.Target.String() != "http://example.com/foo" {
+		t.Fatalf("expected target 'http://example.com/foo', got %v", ctx.Target)
 	}
 
-	if ctx.ParsedExit == nil || ctx.ParsedExit.Name != "header-exit" {
-		t.Fatalf("expected exit 'header-exit', got %v", ctx.ParsedExit)
+	if ctx.Exit == nil || ctx.Exit.Name != "header-exit" {
+		t.Fatalf("expected exit 'header-exit', got %v", ctx.Exit)
 	}
 }
 
 func TestPathIntentParser_MultipleURLsInPath(t *testing.T) {
 	// What happens with /http://example.com/http://another.com?
 	req := httptest.NewRequest("GET", "/http://example.com/http://another.com", nil)
-	ctx := &RequestContext{
+	ctx := &ParsedRequest{
 		Original:      req,
 		RemainingPath: SplitPath(req.URL.Path),
 	}
@@ -181,7 +182,7 @@ func TestPathIntentParser_MultipleURLsInPath(t *testing.T) {
 	}
 
 	// Should parse first URL
-	if ctx.ParsedTarget == nil || ctx.ParsedTarget.String() != "http://example.com/http://another.com" {
+	if ctx.Target == nil || ctx.Target.String() != "http://example.com/http://another.com" {
 		t.Errorf("expected first URL to be parsed fully")
 	}
 }
@@ -190,7 +191,7 @@ func TestPathIntentParser_URLWithFragment(t *testing.T) {
 	// Fragments should be preserved in the target URL
 	req := httptest.NewRequest("GET", "/http://example.com/path#section", nil)
 
-	ctx := &RequestContext{
+	ctx := &ParsedRequest{
 		Original:      req,
 		RemainingPath: SplitPath(req.URL.Path),
 	}
@@ -199,12 +200,12 @@ func TestPathIntentParser_URLWithFragment(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if ctx.ParsedTarget == nil {
+	if ctx.Target == nil {
 		t.Fatalf("expected ParsedTarget to be set")
 	}
 
 	expected := "http://example.com/path#section"
-	if got := ctx.ParsedTarget.String(); got != expected {
+	if got := ctx.Target.String(); got != expected {
 		t.Errorf("expected target '%s', got '%s'", expected, got)
 	}
 }
@@ -212,7 +213,7 @@ func TestPathIntentParser_URLWithFragment(t *testing.T) {
 func TestPathIntentParser_URLWithEncodedCharacters(t *testing.T) {
 	req := httptest.NewRequest("GET", "/http://example.com/path%20with%20spaces", nil)
 
-	ctx := &RequestContext{
+	ctx := &ParsedRequest{
 		Original:      req,
 		RemainingPath: SplitPath(req.URL.Path),
 	}
@@ -221,11 +222,11 @@ func TestPathIntentParser_URLWithEncodedCharacters(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if ctx.ParsedTarget == nil {
+	if ctx.Target == nil {
 		t.Fatalf("expected ParsedTarget to be set")
 	}
 
-	if got := ctx.ParsedTarget.String(); got != "http://example.com/path%20with%20spaces" {
+	if got := ctx.Target.String(); got != "http://example.com/path%20with%20spaces" {
 		t.Errorf("expected encoded characters preserved, got '%s'", got)
 	}
 }
@@ -233,7 +234,7 @@ func TestPathIntentParser_URLWithEncodedCharacters(t *testing.T) {
 func TestPathIntentParser_UnconsumedSegments(t *testing.T) {
 	req := httptest.NewRequest("GET", "/exit/http://example.com/extra/segments", nil)
 
-	ctx := &RequestContext{
+	ctx := &ParsedRequest{
 		Original:      req,
 		RemainingPath: SplitPath(req.URL.Path),
 	}
@@ -244,17 +245,17 @@ func TestPathIntentParser_UnconsumedSegments(t *testing.T) {
 
 	// The URL parsing should consume from "http://example.com/extra/segments"
 	// as a complete URL
-	if ctx.ParsedTarget == nil {
+	if ctx.Target == nil {
 		t.Fatalf("expected ParsedTarget to be set")
 	}
 
 	expected := "http://example.com/extra/segments"
-	if got := ctx.ParsedTarget.String(); got != expected {
+	if got := ctx.Target.String(); got != expected {
 		t.Errorf("expected target '%s', got '%s'", expected, got)
 	}
 
-	if ctx.ParsedExit == nil || ctx.ParsedExit.Name != "exit" {
-		t.Errorf("expected exit 'exit', got %v", ctx.ParsedExit)
+	if ctx.Exit == nil || ctx.Exit.Name != "exit" {
+		t.Errorf("expected exit 'exit', got %v", ctx.Exit)
 	}
 
 	if len(ctx.RemainingPath) != 0 {
@@ -273,6 +274,9 @@ func TestHeaderExitParser_InvalidExitNames(t *testing.T) {
 		{"valid name", "us-west", true},
 		{"with special chars", "exit@123", true},
 		{"very long string", strings.Repeat("a", 1000), true},
+		{"lowercase", "us", true},
+		{"uppercase", "US", true},
+		{"mixed case", "UsWeSt", true},
 	}
 
 	for _, tt := range tests {
@@ -281,7 +285,7 @@ func TestHeaderExitParser_InvalidExitNames(t *testing.T) {
 			req := httptest.NewRequest("GET", "/", nil)
 			req.Header.Set("X-Exit", tt.headerVal)
 
-			ctx := &RequestContext{
+			ctx := &ParsedRequest{
 				Original:      req,
 				RemainingPath: []string{},
 			}
@@ -290,12 +294,12 @@ func TestHeaderExitParser_InvalidExitNames(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			if tt.shouldSet && ctx.ParsedExit == nil {
+			if tt.shouldSet && ctx.Exit == nil {
 				t.Errorf("expected exit to be set for '%s'", tt.headerVal)
 			}
 
-			if !tt.shouldSet && ctx.ParsedExit != nil {
-				t.Errorf("expected exit not to be set for '%s', got %v", tt.headerVal, *ctx.ParsedExit)
+			if !tt.shouldSet && ctx.Exit != nil {
+				t.Errorf("expected exit not to be set for '%s', got %v", tt.headerVal, *ctx.Exit)
 			}
 		})
 	}
@@ -326,5 +330,88 @@ func TestSplitPath_EdgeCases(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestPathIntentParser_NoURLInPath(t *testing.T) {
+	req := httptest.NewRequest("GET", "/just/some/path", nil)
+
+	ctx := &ParsedRequest{
+		Original:      req,
+		RemainingPath: SplitPath(req.URL.Path),
+	}
+
+	err := PathIntentParser(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if ctx.Target != nil {
+		t.Errorf("expected no target to be parsed, got %v", ctx.Target)
+	}
+}
+
+func TestPathIntentParser_SkipsWhenTargetAlreadySet(t *testing.T) {
+	req := httptest.NewRequest("GET", "/http://example.com", nil)
+
+	existingTarget, _ := url.Parse("http://existing.com")
+	ctx := &ParsedRequest{
+		Original:      req,
+		Target:        existingTarget,
+		RemainingPath: SplitPath(req.URL.Path),
+	}
+
+	err := PathIntentParser(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if ctx.Target.Host != "existing.com" {
+		t.Errorf("expected existing target to be preserved, got %s", ctx.Target.Host)
+	}
+}
+
+func TestParseRequestIntent_MultipleParserChain(t *testing.T) {
+	req := httptest.NewRequest("GET", "/exit1/http://example.com", nil)
+	req.Header.Set("X-Exit", "exit2")
+
+	// Header parser runs first and sets exit2
+	// Path parser should not override it
+	ctx, err := ParseRequestIntent(
+		req,
+		HeaderExitParser("X-Exit"),
+		PathIntentParser,
+	)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if ctx.Exit == nil || ctx.Exit.Name != "exit2" {
+		t.Errorf("expected exit 'exit2' from header to be preserved, got %v", ctx.Exit)
+	}
+
+	if ctx.Target == nil || ctx.Target.Host != "example.com" {
+		t.Errorf("expected target to be parsed from path")
+	}
+}
+
+func TestHeaderExitParser_MissingHeader(t *testing.T) {
+	parser := HeaderExitParser("X-Exit")
+	req := httptest.NewRequest("GET", "/", nil)
+	// No X-Exit header set
+
+	ctx := &ParsedRequest{
+		Original:      req,
+		RemainingPath: []string{},
+	}
+
+	err := parser(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if ctx.Exit != nil {
+		t.Errorf("expected no exit to be set when header is missing, got %v", ctx.Exit)
 	}
 }

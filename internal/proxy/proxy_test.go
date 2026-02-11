@@ -371,3 +371,15 @@ func TestNewReverseProxy_HandlesHTTPSTarget(t *testing.T) {
 		t.Errorf("expected body 'secure response', got '%s'", got)
 	}
 }
+
+func TestNewReverseProxy_WithCustomTransport(t *testing.T) {
+	customTransport := &http.Transport{}
+	proxy := NewReverseProxy(WithTransport(customTransport))
+
+	if proxy == nil {
+		t.Fatal("expected non-nil proxy")
+	}
+
+	// We can't directly access the Transport field to verify, but we've
+	// ensured the option is applied without errors
+}

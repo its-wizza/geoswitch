@@ -11,7 +11,7 @@ import (
 // provided proxyHandler for actual proxying.
 func NewProxyHandler(
 	resolver *ConfigExitResolver,
-	proxies map[string]http.Handler,
+	provider ExitHandlerProvider,
 	parsers ...IntentParser,
 ) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, r *http.Request) {
@@ -29,7 +29,7 @@ func NewProxyHandler(
 		}
 
 		// Extract target from context
-		target := ctx.ParsedTarget
+		target := ctx.Target
 		if target == nil {
 			log.Printf("[handler] no target resolved")
 			http.Error(writer, "No target resolved", http.StatusBadRequest)
@@ -45,7 +45,7 @@ func NewProxyHandler(
 		log.Printf("[handler] resolved target: %s", target.String())
 
 		// Extract exit from context
-		exitName, exitCfg, err := resolver.Resolve(ctx.ParsedExit)
+		exitName, exitCfg, err := resolver.Resolve(ctx.Exit)
 		if err != nil {
 			log.Printf("[handler] exit '%s' resolution failed: %v", exitName, err)
 			http.Error(writer, "Unknown or unavailable exit", http.StatusBadRequest)
@@ -59,10 +59,10 @@ func NewProxyHandler(
 			exitCfg.Country,
 		)
 
-		proxy, ok := proxies[exitName]
-		if !ok {
+		proxy, err := provider.GetHandler(ctx, exitName, exitCfg)
+		if err != nil {
 			log.Printf("[handler] no proxy found for exit: %s", exitName)
-			http.Error(writer, "No proxy found for selected exit", http.StatusBadGateway)
+			http.Error(writer, "Exit unavailable", http.StatusBadGateway)
 			return
 		}
 

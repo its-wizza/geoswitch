@@ -7,20 +7,20 @@ import (
 	"strings"
 )
 
-// RequestContext holds information extracted from an HTTP request to be used by parsers.
-type RequestContext struct {
+// ParsedRequest holds information extracted from an HTTP request to be used by parsers.
+type ParsedRequest struct {
 	Original *http.Request // original HTTP request
 
-	ParsedTarget *url.URL // nil if none explicitly requested
-	ParsedExit   *Exit    // nil if none explicitly requested
+	Target *url.URL // nil if none explicitly requested
+	Exit   *Exit    // nil if none explicitly requested
 
 	RemainingPath []string // unconsumed path segments
 }
 
-type IntentParser func(*RequestContext) error
+type IntentParser func(*ParsedRequest) error
 
-func PathIntentParser(ctx *RequestContext) error {
-	if ctx.ParsedTarget != nil || len(ctx.RemainingPath) == 0 {
+func PathIntentParser(ctx *ParsedRequest) error {
+	if ctx.Target != nil || len(ctx.RemainingPath) == 0 {
 		return nil
 	}
 
@@ -29,11 +29,11 @@ func PathIntentParser(ctx *RequestContext) error {
 		return nil
 	}
 
-	ctx.ParsedTarget = targetURL
+	ctx.Target = targetURL
 	updateExitFromControl(ctx, controlSegments)
 
-	if ctx.ParsedExit != nil {
-		log.Printf("[parser] path intent parser: found target '%s' and exit '%s' from path", targetURL.String(), ctx.ParsedExit.Name)
+	if ctx.Exit != nil {
+		log.Printf("[parser] path intent parser: found target '%s' and exit '%s' from path", targetURL.String(), ctx.Exit.Name)
 		return nil
 	} else {
 		log.Printf("[parser] path intent parser: found target '%s' from path", targetURL.String())
@@ -43,8 +43,8 @@ func PathIntentParser(ctx *RequestContext) error {
 }
 
 func HeaderExitParser(headerName string) IntentParser {
-	return func(ctx *RequestContext) error {
-		if ctx.ParsedExit != nil {
+	return func(ctx *ParsedRequest) error {
+		if ctx.Exit != nil {
 			return nil
 		}
 
@@ -53,14 +53,14 @@ func HeaderExitParser(headerName string) IntentParser {
 			return nil
 		}
 
-		ctx.ParsedExit = &Exit{Name: val}
-		log.Printf("[parser] header exit parser: found exit '%s' from header '%s'", ctx.ParsedExit.Name, headerName)
+		ctx.Exit = &Exit{Name: val}
+		log.Printf("[parser] header exit parser: found exit '%s' from header '%s'", ctx.Exit.Name, headerName)
 		return nil
 	}
 }
 
-func ParseRequestIntent(r *http.Request, parsers ...IntentParser) (*RequestContext, error) {
-	ctx := &RequestContext{
+func ParseRequestIntent(r *http.Request, parsers ...IntentParser) (*ParsedRequest, error) {
+	ctx := &ParsedRequest{
 		Original:      r,
 		RemainingPath: SplitPath(r.URL.Path),
 	}
@@ -101,7 +101,7 @@ func SplitPath(path string) []string {
 
 // findTargetURLInPath searches for an absolute URL in the remaining path segments.
 // Returns the URL and the control segments that preceded it.
-func findTargetURLInPath(ctx *RequestContext) (*url.URL, []string) {
+func findTargetURLInPath(ctx *ParsedRequest) (*url.URL, []string) {
 	for i := 0; i < len(ctx.RemainingPath); i++ {
 		candidate := strings.Join(ctx.RemainingPath[i:], "/")
 
@@ -127,11 +127,11 @@ func parseAbsoluteURL(candidate string) *url.URL {
 }
 
 // updateExitFromControl updates the exit and remaining path based on control segments.
-func updateExitFromControl(ctx *RequestContext, control []string) {
-	if ctx.ParsedExit == nil && len(control) > 0 {
+func updateExitFromControl(ctx *ParsedRequest, control []string) {
+	if ctx.Exit == nil && len(control) > 0 {
 		// This parser consumes the first control segment as exit
 		exit := Exit{Name: control[0]}
-		ctx.ParsedExit = &exit
+		ctx.Exit = &exit
 		ctx.RemainingPath = control[1:]
 	} else if len(control) > 0 {
 		// Exit already set elsewhere, preserve all control segments
@@ -143,17 +143,17 @@ func updateExitFromControl(ctx *RequestContext, control []string) {
 }
 
 // logParsedIntent logs the parsed exit and target information.
-func logParsedIntent(ctx *RequestContext) {
+func logParsedIntent(ctx *ParsedRequest) {
 	var exitStr string
-	if ctx.ParsedExit != nil {
-		exitStr = ctx.ParsedExit.Name
+	if ctx.Exit != nil {
+		exitStr = ctx.Exit.Name
 	} else {
 		exitStr = "<nil>"
 	}
 
 	var targetStr string
-	if ctx.ParsedTarget != nil {
-		targetStr = ctx.ParsedTarget.String()
+	if ctx.Target != nil {
+		targetStr = ctx.Target.String()
 	} else {
 		targetStr = "<nil>"
 	}

@@ -8,6 +8,8 @@ import (
 )
 
 func main() {
+	log.Println("[main] initialising geoswitch")
+
 	cfg := &proxy.Config{
 		DefaultExit: "us",
 		Exits: map[string]proxy.ExitConfig{
@@ -35,12 +37,17 @@ func main() {
 		proxies[name] = proxy.NewReverseProxy()
 	}
 
+	provider := &proxy.StaticProvider{
+		Handlers: proxies,
+	}
+
 	handler := proxy.NewProxyHandler(
 		resolver,
-		proxies,
+		provider,
 		proxy.HeaderExitParser("X-GeoSwitch-Exit"),
 		proxy.PathIntentParser,
 	)
 
+	log.Println("[main] starting GeoSwitch on :8080")
 	log.Fatal(http.ListenAndServe(":8080", handler))
 }
