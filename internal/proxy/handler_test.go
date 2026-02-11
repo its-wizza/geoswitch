@@ -10,15 +10,33 @@ import (
 func TestNewProxyHandler_HappyPath_UsesDefaultExit(t *testing.T) {
 	var gotReq *http.Request
 
-	proxies := map[Exit]http.Handler{
-		DefaultExit: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	cfg := &Config{
+		DefaultExit: "default",
+		Exits: map[string]ExitConfig{
+			"default": {
+				Provider: "test",
+				Country:  "US",
+			},
+		},
+	}
+
+	resolver := &ConfigExitResolver{
+		Config: cfg,
+	}
+
+	proxies := map[string]http.Handler{
+		"default": http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			gotReq = r
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("ok"))
 		}),
 	}
 
-	handler := NewProxyHandler(proxies, PathIntentParser)
+	handler := NewProxyHandler(
+		resolver,
+		proxies,
+		PathIntentParser,
+	)
 
 	req := httptest.NewRequest(http.MethodGet, "/http://example.com/api?x=1", nil)
 	w := httptest.NewRecorder()
@@ -59,29 +77,44 @@ func TestNewProxyHandler_HappyPath_UsesDefaultExit(t *testing.T) {
 }
 
 func TestNewProxyHandler_UsesHeaderExitWhenPresent(t *testing.T) {
-	var headerExit = Exit{
-		Name: "header-exit",
+	cfg := &Config{
+		DefaultExit: "default",
+		Exits: map[string]ExitConfig{
+			"default": {
+				Provider: "test",
+				Country:  "US",
+			},
+			"header-exit": {
+				Provider: "test-2",
+				Country:  "DE",
+			},
+		},
 	}
 
-	proxies := map[Exit]http.Handler{
-		DefaultExit: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	resolver := &ConfigExitResolver{
+		Config: cfg,
+	}
+
+	proxies := map[string]http.Handler{
+		"default": http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("default"))
 		}),
-		headerExit: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		"header-exit": http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("header-exit"))
 		}),
 	}
 
 	handler := NewProxyHandler(
+		resolver,
 		proxies,
 		HeaderExitParser("X-GeoSwitch-Exit"),
 		PathIntentParser,
 	)
 
 	req := httptest.NewRequest(http.MethodGet, "/http://example.com", nil)
-	req.Header.Set("X-GeoSwitch-Exit", headerExit.Name)
+	req.Header.Set("X-GeoSwitch-Exit", "header-exit")
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, req)
@@ -96,8 +129,22 @@ func TestNewProxyHandler_UsesHeaderExitWhenPresent(t *testing.T) {
 }
 
 func TestNewProxyHandler_ParseErrorReturnsBadRequest(t *testing.T) {
-	proxies := map[Exit]http.Handler{
-		DefaultExit: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	cfg := &Config{
+		DefaultExit: "default",
+		Exits: map[string]ExitConfig{
+			"default": {
+				Provider: "test",
+				Country:  "US",
+			},
+		},
+	}
+
+	resolver := &ConfigExitResolver{
+		Config: cfg,
+	}
+
+	proxies := map[string]http.Handler{
+		"default": http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}),
 	}
@@ -106,7 +153,11 @@ func TestNewProxyHandler_ParseErrorReturnsBadRequest(t *testing.T) {
 		return errors.New("parse error")
 	}
 
-	handler := NewProxyHandler(proxies, failingParser)
+	handler := NewProxyHandler(
+		resolver,
+		proxies,
+		failingParser,
+	)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
@@ -123,14 +174,28 @@ func TestNewProxyHandler_ParseErrorReturnsBadRequest(t *testing.T) {
 }
 
 func TestNewProxyHandler_NoTargetReturnsBadRequest(t *testing.T) {
-	proxies := map[Exit]http.Handler{
-		DefaultExit: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	cfg := &Config{
+		DefaultExit: "default",
+		Exits: map[string]ExitConfig{
+			"default": {
+				Provider: "test",
+				Country:  "US",
+			},
+		},
+	}
+
+	resolver := &ConfigExitResolver{
+		Config: cfg,
+	}
+
+	proxies := map[string]http.Handler{
+		"default": http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}),
 	}
 
 	// No parsers provided, so no target will be resolved
-	handler := NewProxyHandler(proxies)
+	handler := NewProxyHandler(resolver, proxies)
 
 	req := httptest.NewRequest(http.MethodGet, "/no/target", nil)
 	w := httptest.NewRecorder()
@@ -143,13 +208,31 @@ func TestNewProxyHandler_NoTargetReturnsBadRequest(t *testing.T) {
 }
 
 func TestNewProxyHandler_UnsupportedSchemeReturnsBadRequest(t *testing.T) {
-	proxies := map[Exit]http.Handler{
-		DefaultExit: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	cfg := &Config{
+		DefaultExit: "default",
+		Exits: map[string]ExitConfig{
+			"default": {
+				Provider: "test",
+				Country:  "US",
+			},
+		},
+	}
+
+	resolver := &ConfigExitResolver{
+		Config: cfg,
+	}
+
+	proxies := map[string]http.Handler{
+		"default": http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}),
 	}
 
-	handler := NewProxyHandler(proxies, PathIntentParser)
+	handler := NewProxyHandler(
+		resolver,
+		proxies,
+		PathIntentParser,
+	)
 
 	req := httptest.NewRequest(http.MethodGet, "/ftp://example.com/resource", nil)
 	w := httptest.NewRecorder()
@@ -161,21 +244,39 @@ func TestNewProxyHandler_UnsupportedSchemeReturnsBadRequest(t *testing.T) {
 	}
 }
 
-func TestNewProxyHandler_UnknownExitReturnsBadGateway(t *testing.T) {
-	proxies := map[Exit]http.Handler{
-		DefaultExit: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestNewProxyHandler_UnknownExitReturnsBadRequest(t *testing.T) {
+	cfg := &Config{
+		DefaultExit: "default",
+		Exits: map[string]ExitConfig{
+			"default": {
+				Provider: "test",
+				Country:  "US",
+			},
+		},
+	}
+
+	resolver := &ConfigExitResolver{
+		Config: cfg,
+	}
+
+	proxies := map[string]http.Handler{
+		"default": http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}),
 	}
 
-	handler := NewProxyHandler(proxies, PathIntentParser)
+	handler := NewProxyHandler(
+		resolver,
+		proxies,
+		PathIntentParser,
+	)
 
 	req := httptest.NewRequest(http.MethodGet, "/missing/http://example.com", nil)
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadGateway {
-		t.Fatalf("expected status %d, got %d", http.StatusBadGateway, w.Code)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, w.Code)
 	}
 }

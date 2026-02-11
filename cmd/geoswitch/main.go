@@ -8,35 +8,39 @@ import (
 )
 
 func main() {
-	log.Println("[main] initialising geoswitch")
-
-	// Define exits (for now they all use the same reverse proxy)
-	proxies := map[proxy.Exit]http.Handler{
-		proxy.DefaultExit: proxy.NewReverseProxy(),
+	cfg := &proxy.Config{
+		DefaultExit: "us",
+		Exits: map[string]proxy.ExitConfig{
+			"us": {
+				Provider: "gluetun",
+				Country:  "US",
+			},
+			"de": {
+				Provider: "gluetun",
+				Country:  "DE",
+			},
+		},
 	}
 
-	// Dummy exit for testing
-	var testExit = proxy.Exit{
-		Name: "test",
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("invalid config: %v", err)
 	}
-	proxies[testExit] = proxy.NewReverseProxy()
 
-	// Build handler with intent parsers (ORDER MATTERS)
+	resolver := &proxy.ConfigExitResolver{
+		Config: cfg,
+	}
+
+	proxies := make(map[string]http.Handler)
+	for name := range cfg.Exits {
+		proxies[name] = proxy.NewReverseProxy()
+	}
+
 	handler := proxy.NewProxyHandler(
+		resolver,
 		proxies,
-
-		// 1. Highest priority: explicit header-based exit
 		proxy.HeaderExitParser("X-GeoSwitch-Exit"),
-
-		// 2. Path-based target/exit (e.g. /test/http://example.com)
 		proxy.PathIntentParser,
 	)
 
-	server := &http.Server{
-		Addr:    ":8080",
-		Handler: handler,
-	}
-
-	log.Println("[main] starting GeoSwitch on :8080")
-	log.Fatal(server.ListenAndServe())
+	log.Fatal(http.ListenAndServe(":8080", handler))
 }

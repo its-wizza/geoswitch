@@ -9,13 +9,17 @@ import (
 // each incoming request using the provided TargetResolver. It rewrites the
 // incoming request to point to the resolved target and delegates to the
 // provided proxyHandler for actual proxying.
-func NewProxyHandler(proxies map[Exit]http.Handler, parsers ...IntentParser) http.Handler {
-	return http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
-		log.Printf("[handler] %s %s from %s", req.Method, req.RequestURI, req.RemoteAddr)
+func NewProxyHandler(
+	resolver *ConfigExitResolver,
+	proxies map[string]http.Handler,
+	parsers ...IntentParser,
+) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, r *http.Request) {
+		log.Printf("[handler] %s %s from %s", r.Method, r.RequestURI, r.RemoteAddr)
 
 		// Build context
 		ctx, err := ParseRequestIntent(
-			req,
+			r,
 			parsers...,
 		)
 		if err != nil {
@@ -41,25 +45,34 @@ func NewProxyHandler(proxies map[Exit]http.Handler, parsers ...IntentParser) htt
 		log.Printf("[handler] resolved target: %s", target.String())
 
 		// Extract exit from context
-		exit := DefaultExit
-		if ctx.ParsedExit != nil {
-			exit = *ctx.ParsedExit
+		exitName, exitCfg, err := resolver.Resolve(ctx.ParsedExit)
+		if err != nil {
+			log.Printf("[handler] exit '%s' resolution failed: %v", exitName, err)
+			http.Error(writer, "Unknown or unavailable exit", http.StatusBadRequest)
+			return
 		}
 
-		proxy, ok := proxies[exit]
+		log.Printf(
+			"[handler] resolved exit '%s' (provider=%s, country=%s)",
+			exitName,
+			exitCfg.Provider,
+			exitCfg.Country,
+		)
+
+		proxy, ok := proxies[exitName]
 		if !ok {
-			log.Printf("[handler] no proxy found for exit: %s", exit)
+			log.Printf("[handler] no proxy found for exit: %s", exitName)
 			http.Error(writer, "No proxy found for selected exit", http.StatusBadGateway)
 			return
 		}
 
-		log.Printf("[handler] selected exit: %s", exit)
+		log.Printf("[handler] selected exit: %s", exitName)
 
 		if len(ctx.RemainingPath) > 0 {
 			log.Printf("[handler] warning: unconsumed path segments: %v", ctx.RemainingPath)
 		}
 
-		req = req.Clone(req.Context())
+		req := r.Clone(r.Context())
 		req.URL.Scheme = target.Scheme
 		req.URL.Host = target.Host
 		req.URL.Path = target.Path
