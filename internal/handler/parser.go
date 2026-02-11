@@ -1,18 +1,20 @@
-package proxy
+package handler
 
 import (
 	"log"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"geoswitch/internal/types"
 )
 
 // RequestContext holds information extracted from an HTTP request to be used by parsers.
 type RequestContext struct {
 	Original *http.Request // original HTTP request
 
-	Target *url.URL // nil if none explicitly requested
-	Exit   *Exit    // nil if none explicitly requested
+	Target *url.URL    // nil if none explicitly requested
+	Exit   *types.Exit // nil if none explicitly requested
 
 	RemainingPath []string // unconsumed path segments
 }
@@ -53,7 +55,7 @@ func HeaderExitParser(headerName string) IntentParser {
 			return nil
 		}
 
-		ctx.Exit = &Exit{Name: val}
+		ctx.Exit = &types.Exit{Name: val}
 		log.Printf("[parser] header exit parser: found exit '%s' from header '%s'", ctx.Exit.Name, headerName)
 		return nil
 	}
@@ -130,7 +132,7 @@ func parseAbsoluteURL(candidate string) *url.URL {
 func updateExitFromControl(ctx *RequestContext, control []string) {
 	if ctx.Exit == nil && len(control) > 0 {
 		// This parser consumes the first control segment as exit
-		exit := Exit{Name: control[0]}
+		exit := types.Exit{Name: control[0]}
 		ctx.Exit = &exit
 		ctx.RemainingPath = control[1:]
 	} else if len(control) > 0 {

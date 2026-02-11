@@ -4,15 +4,18 @@ import (
 	"log"
 	"net/http"
 
+	"geoswitch/internal/config"
+	"geoswitch/internal/handler"
+	"geoswitch/internal/provider"
 	"geoswitch/internal/proxy"
 )
 
 func main() {
 	log.Println("[main] initialising geoswitch")
 
-	cfg := &proxy.Config{
+	cfg := &config.Config{
 		DefaultExit: "us",
-		Exits: map[string]proxy.ExitConfig{
+		Exits: map[string]config.ExitConfig{
 			"us": {
 				Provider: "gluetun",
 				Country:  "US",
@@ -28,7 +31,7 @@ func main() {
 		log.Fatalf("invalid config: %v", err)
 	}
 
-	resolver := &proxy.ConfigExitResolver{
+	resolver := &config.ConfigExitResolver{
 		Config: cfg,
 	}
 
@@ -37,15 +40,15 @@ func main() {
 		proxies[name] = proxy.NewReverseProxy()
 	}
 
-	provider := &proxy.StaticProvider{
+	prov := &provider.StaticProvider{
 		Handlers: proxies,
 	}
 
-	handler := proxy.NewProxyHandler(
+	handler := handler.NewProxyHandler(
 		resolver,
-		provider,
-		proxy.HeaderExitParser("X-GeoSwitch-Exit"),
-		proxy.PathIntentParser,
+		prov,
+		handler.HeaderExitParser("X-GeoSwitch-Exit"),
+		handler.PathIntentParser,
 	)
 
 	log.Println("[main] starting GeoSwitch on :8080")

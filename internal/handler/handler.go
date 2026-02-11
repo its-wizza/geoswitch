@@ -1,8 +1,11 @@
-package proxy
+package handler
 
 import (
 	"log"
 	"net/http"
+
+	"geoswitch/internal/config"
+	"geoswitch/internal/provider"
 )
 
 // NewProxyHandler returns an http.Handler that resolves the target for
@@ -10,8 +13,8 @@ import (
 // incoming request to point to the resolved target and delegates to the
 // provided proxyHandler for actual proxying.
 func NewProxyHandler(
-	resolver *ConfigExitResolver,
-	provider ExitHandlerProvider,
+	resolver *config.ConfigExitResolver,
+	provider provider.ExitHandlerProvider,
 	parsers ...IntentParser,
 ) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, r *http.Request) {
@@ -59,7 +62,7 @@ func NewProxyHandler(
 			exitCfg.Country,
 		)
 
-		proxy, err := provider.GetHandler(ctx, exitName, exitCfg)
+		proxy, err := provider.GetHandler(r.Context(), exitName, exitCfg)
 		if err != nil {
 			log.Printf("[handler] no proxy found for exit: %s", exitName)
 			http.Error(writer, "Exit unavailable", http.StatusBadGateway)

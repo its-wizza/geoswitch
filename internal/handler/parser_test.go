@@ -1,10 +1,12 @@
-package proxy
+package handler
 
 import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+
+	"geoswitch/internal/types"
 )
 
 func TestSplitPath_BasicAndEdgeCases(t *testing.T) {
@@ -91,7 +93,7 @@ func TestPathIntentParser_ParsesExitAndRemainingPath(t *testing.T) {
 func TestPathIntentParser_DoesNotOverrideExistingExit(t *testing.T) {
 	req := httptest.NewRequest("GET", "/foo/bar/http://example.com", nil)
 
-	existing := Exit{Name: "pre"}
+	existing := types.Exit{Name: "pre"}
 	ctx := &RequestContext{
 		Original:      req,
 		Exit:          &existing,
@@ -131,7 +133,7 @@ func TestHeaderExitParser_SetsExitFromHeader(t *testing.T) {
 func TestHeaderExitParser_DoesNotOverrideExistingExit(t *testing.T) {
 	parser := HeaderExitParser("X-Exit")
 
-	existing := Exit{Name: "existing"}
+	existing := types.Exit{Name: "existing"}
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("X-Exit", "new")
 

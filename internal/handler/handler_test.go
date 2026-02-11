@@ -1,18 +1,21 @@
-package proxy
+package handler
 
 import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"geoswitch/internal/config"
+	"geoswitch/internal/provider"
 )
 
 func TestNewProxyHandler_HappyPath_UsesDefaultExit(t *testing.T) {
 	var gotReq *http.Request
 
-	cfg := &Config{
+	cfg := &config.Config{
 		DefaultExit: "default",
-		Exits: map[string]ExitConfig{
+		Exits: map[string]config.ExitConfig{
 			"default": {
 				Provider: "test",
 				Country:  "US",
@@ -20,7 +23,7 @@ func TestNewProxyHandler_HappyPath_UsesDefaultExit(t *testing.T) {
 		},
 	}
 
-	resolver := &ConfigExitResolver{
+	resolver := &config.ConfigExitResolver{
 		Config: cfg,
 	}
 
@@ -34,7 +37,7 @@ func TestNewProxyHandler_HappyPath_UsesDefaultExit(t *testing.T) {
 
 	handler := NewProxyHandler(
 		resolver,
-		&StaticProvider{Handlers: proxies},
+		&provider.StaticProvider{Handlers: proxies},
 		PathIntentParser,
 	)
 
@@ -77,9 +80,9 @@ func TestNewProxyHandler_HappyPath_UsesDefaultExit(t *testing.T) {
 }
 
 func TestNewProxyHandler_UsesHeaderExitWhenPresent(t *testing.T) {
-	cfg := &Config{
+	cfg := &config.Config{
 		DefaultExit: "default",
-		Exits: map[string]ExitConfig{
+		Exits: map[string]config.ExitConfig{
 			"default": {
 				Provider: "test",
 				Country:  "US",
@@ -91,7 +94,7 @@ func TestNewProxyHandler_UsesHeaderExitWhenPresent(t *testing.T) {
 		},
 	}
 
-	resolver := &ConfigExitResolver{
+	resolver := &config.ConfigExitResolver{
 		Config: cfg,
 	}
 
@@ -108,7 +111,7 @@ func TestNewProxyHandler_UsesHeaderExitWhenPresent(t *testing.T) {
 
 	handler := NewProxyHandler(
 		resolver,
-		&StaticProvider{Handlers: proxies},
+		&provider.StaticProvider{Handlers: proxies},
 		HeaderExitParser("X-GeoSwitch-Exit"),
 		PathIntentParser,
 	)
@@ -129,9 +132,9 @@ func TestNewProxyHandler_UsesHeaderExitWhenPresent(t *testing.T) {
 }
 
 func TestNewProxyHandler_ParseErrorReturnsBadRequest(t *testing.T) {
-	cfg := &Config{
+	cfg := &config.Config{
 		DefaultExit: "default",
-		Exits: map[string]ExitConfig{
+		Exits: map[string]config.ExitConfig{
 			"default": {
 				Provider: "test",
 				Country:  "US",
@@ -139,7 +142,7 @@ func TestNewProxyHandler_ParseErrorReturnsBadRequest(t *testing.T) {
 		},
 	}
 
-	resolver := &ConfigExitResolver{
+	resolver := &config.ConfigExitResolver{
 		Config: cfg,
 	}
 
@@ -155,7 +158,7 @@ func TestNewProxyHandler_ParseErrorReturnsBadRequest(t *testing.T) {
 
 	handler := NewProxyHandler(
 		resolver,
-		&StaticProvider{Handlers: proxies},
+		&provider.StaticProvider{Handlers: proxies},
 		failingParser,
 	)
 
@@ -174,9 +177,9 @@ func TestNewProxyHandler_ParseErrorReturnsBadRequest(t *testing.T) {
 }
 
 func TestNewProxyHandler_NoTargetReturnsBadRequest(t *testing.T) {
-	cfg := &Config{
+	cfg := &config.Config{
 		DefaultExit: "default",
-		Exits: map[string]ExitConfig{
+		Exits: map[string]config.ExitConfig{
 			"default": {
 				Provider: "test",
 				Country:  "US",
@@ -184,7 +187,7 @@ func TestNewProxyHandler_NoTargetReturnsBadRequest(t *testing.T) {
 		},
 	}
 
-	resolver := &ConfigExitResolver{
+	resolver := &config.ConfigExitResolver{
 		Config: cfg,
 	}
 
@@ -195,7 +198,7 @@ func TestNewProxyHandler_NoTargetReturnsBadRequest(t *testing.T) {
 	}
 
 	// No parsers provided, so no target will be resolved
-	handler := NewProxyHandler(resolver, &StaticProvider{Handlers: proxies})
+	handler := NewProxyHandler(resolver, &provider.StaticProvider{Handlers: proxies})
 
 	req := httptest.NewRequest(http.MethodGet, "/no/target", nil)
 	w := httptest.NewRecorder()
@@ -208,9 +211,9 @@ func TestNewProxyHandler_NoTargetReturnsBadRequest(t *testing.T) {
 }
 
 func TestNewProxyHandler_UnsupportedSchemeReturnsBadRequest(t *testing.T) {
-	cfg := &Config{
+	cfg := &config.Config{
 		DefaultExit: "default",
-		Exits: map[string]ExitConfig{
+		Exits: map[string]config.ExitConfig{
 			"default": {
 				Provider: "test",
 				Country:  "US",
@@ -218,7 +221,7 @@ func TestNewProxyHandler_UnsupportedSchemeReturnsBadRequest(t *testing.T) {
 		},
 	}
 
-	resolver := &ConfigExitResolver{
+	resolver := &config.ConfigExitResolver{
 		Config: cfg,
 	}
 
@@ -230,7 +233,7 @@ func TestNewProxyHandler_UnsupportedSchemeReturnsBadRequest(t *testing.T) {
 
 	handler := NewProxyHandler(
 		resolver,
-		&StaticProvider{Handlers: proxies},
+		&provider.StaticProvider{Handlers: proxies},
 		PathIntentParser,
 	)
 
@@ -245,9 +248,9 @@ func TestNewProxyHandler_UnsupportedSchemeReturnsBadRequest(t *testing.T) {
 }
 
 func TestNewProxyHandler_UnknownExitReturnsBadRequest(t *testing.T) {
-	cfg := &Config{
+	cfg := &config.Config{
 		DefaultExit: "default",
-		Exits: map[string]ExitConfig{
+		Exits: map[string]config.ExitConfig{
 			"default": {
 				Provider: "test",
 				Country:  "US",
@@ -255,7 +258,7 @@ func TestNewProxyHandler_UnknownExitReturnsBadRequest(t *testing.T) {
 		},
 	}
 
-	resolver := &ConfigExitResolver{
+	resolver := &config.ConfigExitResolver{
 		Config: cfg,
 	}
 
@@ -267,7 +270,7 @@ func TestNewProxyHandler_UnknownExitReturnsBadRequest(t *testing.T) {
 
 	handler := NewProxyHandler(
 		resolver,
-		&StaticProvider{Handlers: proxies},
+		&provider.StaticProvider{Handlers: proxies},
 		PathIntentParser,
 	)
 
@@ -282,9 +285,9 @@ func TestNewProxyHandler_UnknownExitReturnsBadRequest(t *testing.T) {
 }
 
 func TestNewProxyHandler_MissingProxyForExit(t *testing.T) {
-	cfg := &Config{
+	cfg := &config.Config{
 		DefaultExit: "default",
-		Exits: map[string]ExitConfig{
+		Exits: map[string]config.ExitConfig{
 			"default": {
 				Provider: "test",
 				Country:  "US",
@@ -296,7 +299,7 @@ func TestNewProxyHandler_MissingProxyForExit(t *testing.T) {
 		},
 	}
 
-	resolver := &ConfigExitResolver{
+	resolver := &config.ConfigExitResolver{
 		Config: cfg,
 	}
 
@@ -309,7 +312,7 @@ func TestNewProxyHandler_MissingProxyForExit(t *testing.T) {
 
 	handler := NewProxyHandler(
 		resolver,
-		&StaticProvider{Handlers: proxies},
+		&provider.StaticProvider{Handlers: proxies},
 		PathIntentParser,
 	)
 
@@ -326,9 +329,9 @@ func TestNewProxyHandler_MissingProxyForExit(t *testing.T) {
 func TestNewProxyHandler_HTTPSScheme(t *testing.T) {
 	var gotReq *http.Request
 
-	cfg := &Config{
+	cfg := &config.Config{
 		DefaultExit: "default",
-		Exits: map[string]ExitConfig{
+		Exits: map[string]config.ExitConfig{
 			"default": {
 				Provider: "test",
 				Country:  "US",
@@ -336,7 +339,7 @@ func TestNewProxyHandler_HTTPSScheme(t *testing.T) {
 		},
 	}
 
-	resolver := &ConfigExitResolver{
+	resolver := &config.ConfigExitResolver{
 		Config: cfg,
 	}
 
@@ -349,7 +352,7 @@ func TestNewProxyHandler_HTTPSScheme(t *testing.T) {
 
 	handler := NewProxyHandler(
 		resolver,
-		&StaticProvider{Handlers: proxies},
+		&provider.StaticProvider{Handlers: proxies},
 		PathIntentParser,
 	)
 
@@ -378,9 +381,9 @@ func TestNewProxyHandler_PreservesHTTPMethod(t *testing.T) {
 		t.Run(method, func(t *testing.T) {
 			var gotMethod string
 
-			cfg := &Config{
+			cfg := &config.Config{
 				DefaultExit: "default",
-				Exits: map[string]ExitConfig{
+				Exits: map[string]config.ExitConfig{
 					"default": {
 						Provider: "test",
 						Country:  "US",
@@ -388,7 +391,7 @@ func TestNewProxyHandler_PreservesHTTPMethod(t *testing.T) {
 				},
 			}
 
-			resolver := &ConfigExitResolver{
+			resolver := &config.ConfigExitResolver{
 				Config: cfg,
 			}
 
@@ -401,7 +404,7 @@ func TestNewProxyHandler_PreservesHTTPMethod(t *testing.T) {
 
 			handler := NewProxyHandler(
 				resolver,
-				&StaticProvider{Handlers: proxies},
+				&provider.StaticProvider{Handlers: proxies},
 				PathIntentParser,
 			)
 

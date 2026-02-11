@@ -1,4 +1,4 @@
-package proxy
+package types
 
 type Exit struct {
 	Name string

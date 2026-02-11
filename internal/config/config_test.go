@@ -1,7 +1,9 @@
-package proxy
+package config
 
 import (
 	"testing"
+
+	"geoswitch/internal/types"
 )
 
 func TestConfig_Validate_ValidConfig(t *testing.T) {
@@ -272,7 +274,7 @@ func TestConfigExitResolver_Resolve_Default(t *testing.T) {
 	}
 
 	// Test empty exit name
-	name, cfg, err = resolver.Resolve(&Exit{Name: ""})
+	name, cfg, err = resolver.Resolve(&types.Exit{Name: ""})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -299,7 +301,7 @@ func TestConfigExitResolver_Resolve_NamedExit(t *testing.T) {
 
 	resolver := &ConfigExitResolver{Config: config}
 
-	name, cfg, err := resolver.Resolve(&Exit{Name: "de"})
+	name, cfg, err := resolver.Resolve(&types.Exit{Name: "de"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -326,7 +328,7 @@ func TestConfigExitResolver_Resolve_UnknownExit(t *testing.T) {
 
 	resolver := &ConfigExitResolver{Config: config}
 
-	_, _, err := resolver.Resolve(&Exit{Name: "nonexistent"})
+	_, _, err := resolver.Resolve(&types.Exit{Name: "nonexistent"})
 	if err == nil {
 		t.Fatal("expected error for unknown exit, got nil")
 	}

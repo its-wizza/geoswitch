@@ -1,9 +1,11 @@
-package proxy
+package config
 
 import (
 	"fmt"
 	"os"
 	"strings"
+
+	"geoswitch/internal/types"
 
 	"go.yaml.in/yaml/v4"
 )
@@ -77,7 +79,7 @@ type ConfigExitResolver struct {
 	Config *Config
 }
 
-func (r *ConfigExitResolver) Resolve(exit *Exit) (string, ExitConfig, error) {
+func (r *ConfigExitResolver) Resolve(exit *types.Exit) (string, ExitConfig, error) {
 	// No exit specified → default
 	if exit == nil || exit.Name == "" {
 		name := r.Config.DefaultExit
