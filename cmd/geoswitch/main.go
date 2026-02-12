@@ -37,7 +37,10 @@ func main() {
 	}
 
 	log.Printf("[main] initialising Gluetun provider")
-	prov, err := provider.NewGluetunProvider("geoswitch-net")
+	prov, err := provider.NewGluetunProvider(
+		provider.WithNetwork("geoswitch-net"),
+		provider.WithImageVersion("qmcgaw/gluetun:v3.41.0"),
+	)
 	if err != nil {
 		log.Fatalf("[main] failed to create Gluetun provider: %v", err)
 	}
