@@ -328,12 +328,6 @@ func (p *GluetunProvider) Close(ctx context.Context) error {
 
 	p.runtimes = make(map[string]*exitRuntime)
 
-	// Remove network
-	log.Printf("[gluetun] removing network '%s'", p.network)
-	if err := p.docker.NetworkRemove(ctx, p.network); err != nil {
-		log.Printf("[gluetun] error removing network '%s': %v", p.network, err)
-	}
-
 	// Close Docker client
 	log.Printf("[gluetun] closing docker client")
 	return p.docker.Close()
