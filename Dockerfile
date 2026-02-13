@@ -7,7 +7,7 @@ RUN go mod download
 COPY . .
 RUN go build -o geoswitch ./cmd/geoswitch
 
-FROM alpine:latest
+FROM alpine:3.23
 WORKDIR /
 COPY --from=builder /app/geoswitch /usr/local/bin/geoswitch
 

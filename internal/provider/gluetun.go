@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"sync"
 	"time"
 
@@ -23,6 +24,7 @@ type exitRuntime struct {
 	handler       http.Handler
 	containerID   string
 	containerName string
+	cancelLogs    context.CancelFunc
 }
 
 type gluetunConfig struct {
@@ -110,12 +112,26 @@ func (p *GluetunProvider) GetHandler(
 		containerID = resp.ID
 	}
 
+	// Track the runtime immediately so Close() can clean it up if health check fails
+	rt := &exitRuntime{
+		containerID:   containerID,
+		containerName: containerName,
+	}
+	p.runtimes[exitName] = rt
+
 	// Write logs to main logger
-	p.streamLogs(ctx, containerID)
+	cancelLogs := p.streamLogs(containerID)
+	rt.cancelLogs = cancelLogs
 
 	// Wait for container to become healthy
 	if err := p.waitForHealthy(ctx, containerName, 60*time.Second); err != nil {
 		log.Printf("[gluetun] container '%s' failed health check: %v", containerName, err)
+		// Clean up on failure
+		cancelLogs()
+		delete(p.runtimes, exitName)
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		p.docker.ContainerStop(stopCtx, containerID, container.StopOptions{})
+		stopCancel()
 		return nil, err
 	}
 
@@ -131,13 +147,7 @@ func (p *GluetunProvider) GetHandler(
 
 	handler := proxy.NewReverseProxy(proxy.WithTransport(transport))
 
-	rt := &exitRuntime{
-		handler:       handler,
-		containerID:   containerID,
-		containerName: containerName,
-	}
-
-	p.runtimes[exitName] = rt
+	rt.handler = handler
 	log.Printf("[gluetun] handler created and cached for exit '%s'", exitName)
 	return handler, nil
 }
@@ -188,7 +198,10 @@ func (p *GluetunProvider) createContainer(
 	env := []string{
 		"HTTPPROXY=on",
 		"SERVER_COUNTRIES=" + cfg.Country,
-		// Provider-specific variables later
+		// Temp solution for testing. Env vars should be consumed in main, or referenced in config.yaml
+		"VPN_SERVICE_PROVIDER=" + getEnv("VPN_SERVICE_PROVIDER"),
+		"OPENVPN_USER=" + getEnv("OPENVPN_USER"),
+		"OPENVPN_PASSWORD=" + getEnv("OPENVPN_PASSWORD"),
 	}
 
 	resp, err := p.docker.ContainerCreate(
@@ -198,7 +211,17 @@ func (p *GluetunProvider) createContainer(
 			Env:   env,
 		},
 		&container.HostConfig{
-			AutoRemove: false,
+			AutoRemove: true,
+			CapAdd:     []string{"NET_ADMIN"},
+			Resources: container.Resources{
+				Devices: []container.DeviceMapping{
+					{
+						PathOnHost:        "/dev/net/tun",
+						PathInContainer:   "/dev/net/tun",
+						CgroupPermissions: "rwm",
+					},
+				},
+			},
 		},
 		&network.NetworkingConfig{
 			EndpointsConfig: map[string]*network.EndpointSettings{
@@ -223,10 +246,9 @@ func (p *GluetunProvider) createContainer(
 	return resp.ID, nil
 }
 
-func (p *GluetunProvider) streamLogs(ctx context.Context, containerID string) {
+func (p *GluetunProvider) streamLogs(containerID string) context.CancelFunc {
+	logCtx, cancel := context.WithCancel(context.Background())
 	go func() {
-		// Use background context for log streaming to prevent early cancellation
-		logCtx := context.Background()
 		reader, err := p.docker.ContainerLogs(logCtx, containerID, container.LogsOptions{
 			ShowStdout: true,
 			ShowStderr: true,
@@ -238,8 +260,10 @@ func (p *GluetunProvider) streamLogs(ctx context.Context, containerID string) {
 		}
 		defer reader.Close()
 
+		// Copy logs until context is cancelled or stream ends
 		io.Copy(log.Writer(), reader)
 	}()
+	return cancel
 }
 
 func (p *GluetunProvider) waitForHealthy(
@@ -290,6 +314,10 @@ func (p *GluetunProvider) Close(ctx context.Context) error {
 	// Stop all running containers
 	for exitName, rt := range p.runtimes {
 		log.Printf("[gluetun] stopping container '%s' for exit '%s'", rt.containerName, exitName)
+		// Cancel log streaming first
+		if rt.cancelLogs != nil {
+			rt.cancelLogs()
+		}
 		stopCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		err := p.docker.ContainerStop(stopCtx, rt.containerID, container.StopOptions{})
 		cancel()
@@ -338,4 +366,8 @@ func NewGluetunProvider(opts ...GluetunOption) (*GluetunProvider, error) {
 		network:  config.network,
 		image:    config.imageVersion,
 	}, nil
+}
+
+func getEnv(key string) string {
+	return os.Getenv(key)
 }

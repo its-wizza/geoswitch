@@ -1,10 +1,10 @@
 services:
   geoswitch:
-    image: geoswitch:dev
-    container_name: geoswitch
     build:
       context: .
       dockerfile: Dockerfile
+    image: geoswitch:dev
+    container_name: geoswitch
     ports:
       - "8080:8080"
     volumes:

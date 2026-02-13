@@ -13,15 +13,11 @@ func main() {
 	log.Println("[main] initialising GeoSwitch")
 
 	cfg := &config.Config{
-		DefaultExit: "us",
+		DefaultExit: "kr",
 		Exits: map[string]config.ExitConfig{
-			"us": {
+			"kr": {
 				Provider: "gluetun",
-				Country:  "US",
-			},
-			"de": {
-				Provider: "gluetun",
-				Country:  "DE",
+				Country:  "Korea",
 			},
 		},
 	}
