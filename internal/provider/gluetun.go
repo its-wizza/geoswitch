@@ -28,7 +28,7 @@ type exitRuntime struct {
 }
 
 type gluetunConfig struct {
-	network      string
+	network      *string
 	imageVersion string
 }
 
@@ -36,10 +36,10 @@ type gluetunConfig struct {
 type GluetunOption func(*gluetunConfig)
 
 // WithNetwork sets a custom Docker network name.
-// If not provided, defaults to "gluetun".
+// If not provided, the network is auto-detected from the current container.
 func WithNetwork(network string) GluetunOption {
 	return func(c *gluetunConfig) {
-		c.network = network
+		c.network = &network
 	}
 }
 
@@ -335,15 +335,14 @@ func (p *GluetunProvider) Close(ctx context.Context) error {
 
 func NewGluetunProvider(opts ...GluetunOption) (*GluetunProvider, error) {
 	config := &gluetunConfig{
-		network:      "gluetun",
 		imageVersion: "qmcgaw/gluetun:latest",
+		network:      nil, // nil means auto-detect
 	}
 
 	for _, opt := range opts {
 		opt(config)
 	}
 
-	log.Printf("[gluetun] initialising GluetunProvider with network '%s'", config.network)
 	cli, err := client.NewClientWithOpts(
 		client.FromEnv,
 		client.WithAPIVersionNegotiation(),
@@ -353,15 +352,63 @@ func NewGluetunProvider(opts ...GluetunOption) (*GluetunProvider, error) {
 		return nil, err
 	}
 
+	// Auto-detect network if not specified
+	var networkName string
+	if config.network == nil {
+		detected, err := detectCurrentNetwork(cli)
+		if err != nil {
+			log.Printf("[gluetun] failed to auto-detect network: %v", err)
+			return nil, err
+		}
+		networkName = detected
+		log.Printf("[gluetun] auto-detected network: '%s'", networkName)
+	} else {
+		networkName = *config.network
+		log.Printf("[gluetun] using configured network: '%s'", networkName)
+	}
+
 	log.Printf("[gluetun] docker client initialised successfully")
 	return &GluetunProvider{
 		runtimes: make(map[string]*exitRuntime),
 		docker:   cli,
-		network:  config.network,
+		network:  networkName,
 		image:    config.imageVersion,
 	}, nil
 }
 
 func getEnv(key string) string {
 	return os.Getenv(key)
+}
+
+// detectCurrentNetwork determines which Docker network the current container is running on.
+// It reads the container's hostname and inspects it to find the network.
+func detectCurrentNetwork(cli *client.Client) (string, error) {
+	ctx := context.Background()
+
+	// Get hostname (which is the container ID or name in Docker)
+	hostname, err := os.Hostname()
+	if err != nil {
+		return "", fmt.Errorf("failed to get hostname: %w", err)
+	}
+
+	// Inspect the current container
+	inspect, err := cli.ContainerInspect(ctx, hostname)
+	if err != nil {
+		return "", fmt.Errorf("failed to inspect container %s: %w", hostname, err)
+	}
+
+	// Find the first non-default network
+	for networkName := range inspect.NetworkSettings.Networks {
+		// Skip the default bridge network
+		if networkName != "bridge" && networkName != "host" && networkName != "none" {
+			return networkName, nil
+		}
+	}
+
+	// If only on default networks, return the first one
+	for networkName := range inspect.NetworkSettings.Networks {
+		return networkName, nil
+	}
+
+	return "", fmt.Errorf("container is not connected to any network")
 }
